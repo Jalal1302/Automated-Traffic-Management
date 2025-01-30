@@ -5,6 +5,7 @@ Django web application which represent system that monitors all vehicles in the 
 
 ## Collaborators
 Jalal Mammadov
+
 Laurent Bialylew
 
 ## Requirements
