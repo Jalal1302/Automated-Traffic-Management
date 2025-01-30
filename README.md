@@ -9,6 +9,7 @@ Laurent Bialylew
 
 ## Requirements
 *[Django](https://www.djangoproject.com/)
+
 *[Python 3.11](https://www.python.org/downloads/)
 
 ## Core features
