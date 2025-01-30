@@ -1,5 +1,6 @@
 from django.shortcuts import render
 from django.http import JsonResponse
+from django.core.exceptions import ValidationError
 import json
 from .models import Vehicle, Road, Junction
 import requests
