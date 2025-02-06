@@ -4,6 +4,7 @@ from django.core.exceptions import ValidationError
 import json
 from .models import Vehicle, Road, Junction
 import requests
+
 # Create your views here.
 
 
