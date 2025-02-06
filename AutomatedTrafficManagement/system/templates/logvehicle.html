@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Log Vehicle</title>
+</head>
+<body>
+    <h1>Log Vehicle at a Junction</h1>
+
+    <form method="get" action="{% url 'logvehicle' %}">
+        <input type="text" name="junction" placeholder="Junction Name" required>
+        <input type="text" name="vehicle" placeholder="Vehicle Plate Number" required>
+        <button type="submit">Log Vehicle</button>
+    </form>
+
+    <a href="{% url 'home' %}">Back to Home</a>
+</body>
+</html>

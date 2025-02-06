@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Violations List</title>
+</head>
+<body>
+
+    <h1>List of Violations</h1>
+
+    <!-- Displaying all violations -->
+    <table border="1">
+        <thead>
+            <tr>
+                <th>Vehicle Number Plate</th>
+                <th>Violation Type</th>
+                <th>Severity</th>
+                <th>Timestamp</th>
+                <th>Junction</th>
+                <th>Fine Amount</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for violation in violations %}
+                <tr>
+                    <td>{{ violation.vehicle.number_plate }}</td>
+                    <td>{{ violation.get_violation_type_display }}</td>
+                    <td>{{ violation.get_severity_display }}</td>
+                    <td>{{ violation.timestamp }}</td>
+                    <td>{{ violation.junction.name if violation.junction else 'N/A' }}</td>
+                    <td>{{ violation.fine_amount }}</td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+</body>
+</html>
