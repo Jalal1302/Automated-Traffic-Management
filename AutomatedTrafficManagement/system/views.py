@@ -7,25 +7,34 @@ import requests
 # Create your views here.
 
 
+
+def home(request):
+    return render (request, 'home.html')
+
+
 def add_vehicle(request):
     number_plate = request.GET.get('plate', '')
     owner_name = request.GET.get('owner', '')
     vehicle_type = request.GET.get('type', '')
+    owner_email = request.GET.get('email', '')
     if not number_plate:
         return JsonResponse({"error": "Vehicle plate number is required."}, status=400)
     if not owner_name:
         return JsonResponse({"error": "Owner name is required."}, status=400)
     if not vehicle_type:
         return JsonResponse({"error": "Vehicle type is required."}, status=400)
+    if not owner_email:
+        return JsonResponse({"error": "Owner Email is requried."}, status=400)
 
     try:
-        vehicle, created = Vehicle.objects.get_or_create(number_plate=number_plate, owner_name=owner_name, vehicle_type=vehicle_type)
+        vehicle, created = Vehicle.objects.get_or_create(number_plate=number_plate, owner_name=owner_name, vehicle_type=vehicle_type,owner_email=owner_email)
         return JsonResponse({
             "message": "Vehicle registered successfully!" if created else "Vehicle already registered.",
             "Vechicle": {
                 "Plate": vehicle.number_plate,
                 "Owner": vehicle.owner_name,
-                "Type": vehicle.vehicle_type
+                "Type": vehicle.vehicle_type,
+                "Email": vehicle.owner_email
             }
         }, status=201 if created else 200)
     
@@ -40,7 +49,7 @@ def add_roads(request):
     
     try:
         road, created = Road.objects.get_or_create(name=name)
-        return JsonResponse({
+        return render(request,"addroads.html",{
             "message": "Road created successfully!" if created else "Road already exists.",
             "road": {
                 "name": road.name,

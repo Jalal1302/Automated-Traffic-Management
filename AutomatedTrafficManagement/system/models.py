@@ -7,16 +7,18 @@ class Vehicle(models.Model):
     owner_name = models.CharField(max_length=100)
     vehicle_type = models.CharField(max_length=10)
     registration_date = models.DateTimeField(auto_now_add=True)
+    owner_email = models.CharField(max_length=100)
 
     def __str__(self):
         return f"{self.number_plate} - {self.owner_name}"
     
     @classmethod
-    def create(cls, number_plate, owner_name, vehicle_type):
+    def create(cls, number_plate, owner_name, vehicle_type,owner_email):
         vehicle = cls(
             number_plate=number_plate,
             owner_name=owner_name,
-            vehicle_type=vehicle_type
+            vehicle_type=vehicle_type,
+            owner_email=owner_email
         )
         vehicle.save()
         return vehicle
