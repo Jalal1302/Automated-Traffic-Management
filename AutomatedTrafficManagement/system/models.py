@@ -65,7 +65,7 @@ class Road(models.Model):
 class Junction(models.Model):
     name = models.CharField(max_length=100)
     roads = models.ManyToManyField(Road)
-    logged_vehicles = models.ManyToManyField(Vehicle, blank=True)
+    logged_vehicles = models.ManyToManyField(Vehicle, through='JunctionVehicleLog', blank=True)
     last_status_change = models.DateTimeField(default=timezone.now)
     
     def __str__(self):
@@ -82,7 +82,7 @@ class Junction(models.Model):
         super().save(*args, **kwargs)
     
     def update_light_statuses(self):
-        """Updates light status of all roads in the junction"""
+
         time_elapsed = timezone.now() - self.last_status_change
         seconds_elapsed = time_elapsed.total_seconds()
         
@@ -107,7 +107,7 @@ class Junction(models.Model):
             self.save()
     
     def get_roads_status(self):
-        """Returns current status of all roads in the junction"""
+
         self.update_light_statuses()
         return {
             road.name: road.light_status 
@@ -131,8 +131,12 @@ class Junction(models.Model):
         junction.roads.set(roads)
         return junction
     
-    def log_vehicle(self, vehicle):
-        self.logged_vehicles.add(vehicle)
+    def log_vehicle(self, vehicle, entry_road):
+        JunctionVehicleLog.objects.create(
+            junction = self,
+            vehicle = vehicle,
+            entry_road = entry_road,
+        )
 
         
 class Violation(models.Model):
@@ -194,4 +198,11 @@ class Violation(models.Model):
         violation.save()
         return violation
 
+class JunctionVehicleLog(models.Model):
+    junction = models.ForeignKey('Junction', on_delete=models.CASCADE)
+    vehicle = models.ForeignKey('Vehicle', on_delete=models.CASCADE)
+    entry_road = models.ForeignKey('Road', on_delete=models.CASCADE)
+    timestamp = models.DateTimeField(auto_now_add=True)
 
+    class Meta:
+        ordering = ['-timestamp']

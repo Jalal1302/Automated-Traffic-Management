@@ -2,7 +2,7 @@ from django.shortcuts import render
 from django.http import JsonResponse
 from django.core.exceptions import ValidationError
 import json
-from .models import Vehicle, Road, Junction
+from .models import Vehicle, Road, Junction, JunctionVehicleLog, Violation
 import requests
 
 # Create your views here.
@@ -108,15 +108,25 @@ def get_junctions(request):
         {
             "name": junction.name,
             "roads": [road.name for road in junction.roads.all()],
-            "logged_vehicles": [vehicle.number_plate for vehicle in junction.logged_vehicles.all()]
+            "logged_vehicles": [
+                {
+                    "plate": log.vehicle.number_plate,
+                    "entry_road": log.entry_road.name,
+                    "timestamp": log.timestamp
+                }
+                for log in JunctionVehicleLog.objects.filter(junction=junction)
+            ]
         }
         for junction in junctions
     ]
     return JsonResponse(data, safe=False)
 
+
+
 def log_vehicle_at_junction(request):
     junction_name = request.GET.get('junction', '')
     vehicle_plate = request.GET.get('vehicle', '')
+    entry_road_name = request.GET.get('entry_road', '')
     
     if not junction_name:
         return JsonResponse({"error": "Junction name is required."}, status=400)
@@ -124,25 +134,63 @@ def log_vehicle_at_junction(request):
     if not vehicle_plate:
         return JsonResponse({"error": "Vehicle number plate is required."}, status=400)
     
+    if not entry_road_name:
+        return JsonResponse({"error": "Entry road name is required."}, status=400)
+    
     try:
         # Get the junction and vehicle objects
         junction = Junction.objects.get(name=junction_name)
         vehicle = Vehicle.objects.get(number_plate=vehicle_plate)
+        entry_road = Road.objects.get(name=entry_road_name)
+
+        if not junction.roads.filter(id=entry_road.id).exists():
+            return JsonResponse({
+                "error": f"Road '{entry_road_name}' is not connected to junction '{junction_name}'."
+            }, status=400)
+        
+
+        if entry_road.current_light_status == 'RED':
+            violation = Violation.create(
+                vehicle=vehicle,
+                violation_type='RED_LIGHT',
+                severity='HIGH',
+                junction=junction,
+                description=f"Vehicle ran red light at {entry_road.name} entering {junction.name} junction"
+            )
+
         
         # Log the vehicle at the junction
-        junction.log_vehicle(vehicle)
+        junction.log_vehicle(vehicle, entry_road)
         
-        return JsonResponse({
+        response_data = {
             "message": "Vehicle logged successfully!",
             "junction": {
                 "name": junction.name,
-                "vehicle": vehicle.number_plate
+                "vehicle": vehicle.number_plate,
+                "entry_road": entry_road.name,
+                "light_status": entry_road.current_light_status
             }
-        }, status=200)
+        }
+        
+        # Add violation information if a red light was run
+        if entry_road.current_light_status == 'RED':
+            response_data["violation"] = {
+                "type": "RED_LIGHT",
+                "severity": "HIGH",
+                "fine_amount": float(violation.fine_amount),
+                "description": violation.description
+            }
+            response_data["message"] = "Vehicle logged successfully, but violation recorded for running red light!"
+            
+        return JsonResponse(response_data, status=200)
+
+
     
     except Junction.DoesNotExist:
         return JsonResponse({"error": "Junction does not exist."}, status=404)
     except Vehicle.DoesNotExist:
         return JsonResponse({"error": "Vehicle does not exist."}, status=404)
+    except Road.DoesNotExist:
+        return JsonResponse({"error": "Entry road does not exist."}, status=404)
     except Exception as e:
         return JsonResponse({"error": f"An error occurred: {str(e)}"}, status=500)
