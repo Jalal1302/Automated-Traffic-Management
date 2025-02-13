@@ -3,6 +3,10 @@ from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
 from django.utils import timezone
 from datetime import datetime, timedelta
+from django.core.validators import MinValueValidator, MaxValueValidator
+from django.db.models import Avg, Count, Sum, Q
+from django.http import JsonResponse
+import json
 
 class Vehicle(models.Model):
     number_plate = models.CharField(max_length=10, unique=True)
@@ -132,12 +136,14 @@ class Junction(models.Model):
         return junction
     
     def log_vehicle(self, vehicle, entry_road):
-        JunctionVehicleLog.objects.create(
+        log = JunctionVehicleLog.objects.create(
             junction = self,
             vehicle = vehicle,
             entry_road = entry_road,
         )
 
+        TrafficAnalytics.record_traffic(self, log.timestamp)
+        return log
         
 class Violation(models.Model):
     VIOLATION_TYPES = [
@@ -206,3 +212,48 @@ class JunctionVehicleLog(models.Model):
 
     class Meta:
         ordering = ['-timestamp']
+
+class TrafficAnalytics(models.Model):
+    junction = models.ForeignKey('Junction', on_delete=models.CASCADE, related_name='analytics')
+    date = models.DateField()
+    hour = models.IntegerField(validators=[MinValueValidator(0), MaxValueValidator(23)])
+    vehicle_count = models.IntegerField(default=0)
+    peak_status = models.BooleanField(default=False)  # Flag for peak hours
+    
+    class Meta:
+        unique_together = ['junction', 'date', 'hour']
+        
+    @classmethod
+    def record_traffic(cls, junction, timestamp):
+        """Record traffic count for a specific hour"""
+        date = timestamp.date()
+        hour = timestamp.hour
+        
+        analytics, created = cls.objects.get_or_create(
+            junction=junction,
+            date=date,
+            hour=hour,
+            defaults={'vehicle_count': 0}
+        )
+        
+        # Increment vehicle count
+        analytics.vehicle_count += 1
+        
+        
+        analytics.peak_status = analytics.vehicle_count > 4
+        analytics.save()
+        
+        return analytics
+
+    @classmethod
+    def get_daily_summary(cls, junction, date):
+        """Get traffic summary for a specific day"""
+        return cls.objects.filter(
+            junction=junction,
+            date=date
+        ).aggregate(
+            total_vehicles=Sum('vehicle_count'),
+            avg_vehicles_per_hour=Avg('vehicle_count'),
+            peak_hours_count=Count('id', filter=Q(peak_status=True))
+        )
+

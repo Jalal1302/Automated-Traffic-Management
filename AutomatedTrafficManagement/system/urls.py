@@ -9,4 +9,5 @@ urlpatterns = [
     path('addjunction/', views.add_junction, name = 'addjunction'),
     path('getjunction/', views.get_junctions, name = 'getjunction'),
     path('logvehicle/', views.log_vehicle_at_junction, name = 'logvehicle'),
+    path('trafficanalysis/', views.get_traffic_analysis, name = 'trafficanalysis'),
 ]

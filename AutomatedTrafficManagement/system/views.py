@@ -2,8 +2,9 @@ from django.shortcuts import render
 from django.http import JsonResponse
 from django.core.exceptions import ValidationError
 import json
-from .models import Vehicle, Road, Junction, JunctionVehicleLog, Violation
+from .models import Vehicle, Road, Junction, JunctionVehicleLog, Violation, TrafficAnalytics
 import requests
+from datetime import datetime
 
 # Create your views here.
 
@@ -194,3 +195,72 @@ def log_vehicle_at_junction(request):
         return JsonResponse({"error": "Entry road does not exist."}, status=404)
     except Exception as e:
         return JsonResponse({"error": f"An error occurred: {str(e)}"}, status=500)
+
+
+def get_traffic_analysis(request):
+    
+    junction_name = request.GET.get('junction', '')
+    date_str = request.GET.get('date', '')
+    
+    # Check if junction name was provided
+    if not junction_name:
+        return JsonResponse({
+            "error": "Junction name is required.",
+            "details": "Please provide a junction name in the query parameters."
+        }, status=400)
+    
+    # Check if date was provided
+    if not date_str:
+        return JsonResponse({
+            "error": "Date is required.",
+            "details": "Please provide a date in YYYY-MM-DD format."
+        }, status=400)
+    
+    try:
+        # Try to get the junction
+        try:
+            junction = Junction.objects.get(name=junction_name)
+        except Junction.DoesNotExist:
+            return JsonResponse({
+                "error": "Junction not found.",
+                "details": f"No junction exists with the name '{junction_name}'. Please check the junction name and try again."
+            }, status=404)
+        
+        # Try to parse the date
+        try:
+            date = datetime.strptime(date_str, '%Y-%m-%d').date()
+        except ValueError:
+            return JsonResponse({
+                "error": "Invalid date format.",
+                "details": "Date must be in YYYY-MM-DD format. For example: 2025-02-13"
+            }, status=400)
+        
+        # Get hourly counts
+        hourly_data = TrafficAnalytics.objects.filter(
+            junction=junction,
+            date=date
+        ).values('hour', 'vehicle_count')
+        
+        # Check if any data exists for this date
+        if not hourly_data.exists():
+            return JsonResponse({
+                "error": "No data available.",
+                "details": f"No traffic data found for junction '{junction_name}' on {date_str}"
+            }, status=404)
+        
+        # Get daily summary
+        summary = TrafficAnalytics.get_daily_summary(junction, date)
+        
+        return JsonResponse({
+            'junction': junction_name,
+            'date': date_str,
+            'hourly_data': list(hourly_data),
+            'daily_summary': summary
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            "error": "An unexpected error occurred.",
+            "details": str(e)
+        }, status=500)
+
