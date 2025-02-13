@@ -264,3 +264,52 @@ def get_traffic_analysis(request):
             "details": str(e)
         }, status=500)
 
+
+def analyze_congestion(request):
+
+    try:
+        days = int(request.GET.get('days', 1))
+        threshold = int(request.GET.get('threshold', 5))
+        
+        if days <= 0:
+            return JsonResponse({
+                "error": "Invalid days parameter",
+                "details": "Days must be a positive number"
+            }, status=400)
+            
+        if threshold <= 0:
+            return JsonResponse({
+                "error": "Invalid threshold parameter",
+                "details": "Threshold must be a positive number"
+            }, status=400)
+        
+        congestion_analysis = TrafficAnalytics.identify_congestion_prone_areas(
+            threshold_vehicles=threshold,
+            days_to_analyze=days
+        )
+        
+        if not congestion_analysis:
+            return JsonResponse({
+                "message": "No congestion data available for the specified period",
+                "data": []
+            })
+        
+        return JsonResponse({
+            "message": "Congestion analysis completed successfully",
+            "analysis_period": f"Last {days} days",
+            "congestion_threshold": f"{threshold} vehicles per hour",
+            "data": congestion_analysis
+        })
+        
+    except ValueError as e:
+        return JsonResponse({
+            "error": "Invalid parameter",
+            "details": str(e)
+        }, status=400)
+        
+    except Exception as e:
+        return JsonResponse({
+            "error": "An unexpected error occurred",
+            "details": str(e)
+        }, status=500)
+

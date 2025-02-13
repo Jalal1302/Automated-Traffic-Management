@@ -4,7 +4,9 @@ from django.utils.translation import gettext_lazy as _
 from django.utils import timezone
 from datetime import datetime, timedelta
 from django.core.validators import MinValueValidator, MaxValueValidator
-from django.db.models import Avg, Count, Sum, Q
+from django.db.models import Avg, Count, Sum, Q, Max
+from django.db.models.functions import Cast
+from django.db.models import FloatField
 from django.http import JsonResponse
 import json
 
@@ -256,4 +258,47 @@ class TrafficAnalytics(models.Model):
             avg_vehicles_per_hour=Avg('vehicle_count'),
             peak_hours_count=Count('id', filter=Q(peak_status=True))
         )
+    
+    @classmethod
+    def identify_congestion_prone_areas(cls, threshold_vehicles=5, days_to_analyze=1):
+
+        end_date = timezone.now().date()
+        start_date = end_date - timedelta(days=days_to_analyze)
+        
+        # Get all junctions with their traffic data
+        congestion_data = cls.objects.filter(
+            date__range=[start_date, end_date]
+        ).values(
+            'junction__name'
+        ).annotate(
+            total_peak_hours=Count('id', filter=Q(vehicle_count__gt=threshold_vehicles)),
+            avg_daily_vehicles=Avg('vehicle_count'),
+            max_hourly_vehicles=Max('vehicle_count'),
+            congestion_frequency=Count('id', filter=Q(vehicle_count__gt=threshold_vehicles)) / Cast(days_to_analyze, FloatField()) * 100
+        ).order_by('-congestion_frequency')
+        
+        congestion_prone_areas = []
+        for data in congestion_data:
+            risk_level = 'LOW'
+            if data['congestion_frequency'] > 75:
+                risk_level = 'SEVERE'
+            elif data['congestion_frequency'] > 50:
+                risk_level = 'HIGH'
+            elif data['congestion_frequency'] > 25:
+                risk_level = 'MODERATE'
+            
+            congestion_prone_areas.append({
+                'junction_name': data['junction__name'],
+                'risk_level': risk_level,
+                'stats': {
+                    'total_peak_hours': data['total_peak_hours'],
+                    'avg_daily_vehicles': round(data['avg_daily_vehicles'], 2),
+                    'max_hourly_vehicles': data['max_hourly_vehicles'],
+                    'congestion_frequency': round(data['congestion_frequency'], 2)
+                }
+            })
+        
+        return congestion_prone_areas
+
+
 
