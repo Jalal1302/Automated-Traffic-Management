@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Add Vehicle</title>
+</head>
+<body>
+    <h1>Add Vehicle</h1>
+
+    {% if error %}
+        <div>
+            <p>{{ error }}</p>
+        </div>
+    {% endif %}
+
+    {% if message %}
+        <div>
+            <p>{{ message }}</p>
+        </div>
+    {% endif %}
+
+    {% if vehicle %}
+        <h2>Vehicle Details:</h2>
+        <ul>
+            <li><strong>Plate:</strong> {{ vehicle.Plate }}</li>
+            <li><strong>Owner:</strong> {{ vehicle.Owner }}</li>
+            <li><strong>Type:</strong> {{ vehicle.Type }}</li>
+            <li><strong>Email:</strong> {{ vehicle.Email }}</li>
+        </ul>
+    {% endif %}
+
+    <form method="GET">
+        <label for="plate">Vehicle Plate Number:</label><br>
+        <input type="text" id="plate" name="plate"><br><br>
+
+        <label for="owner">Owner Name:</label><br>
+        <input type="text" id="owner" name="owner"><br><br>
+
+        <label for="type">Vehicle Type:</label><br>
+        <input type="text" id="type" name="type"><br><br>
+
+        <label for="email">Owner Email:</label><br>
+        <input type="email" id="email" name="email"><br><br>
+
+        <input type="submit" value="Submit">
+        <br><br>
+        <a href="{% url 'home' %}">Back to Home</a>
+    </form>
+
+</body>
+</html>

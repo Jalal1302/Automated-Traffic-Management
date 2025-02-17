@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Junctions</title>
+</head>
+<body>
+    <h1>Junctions</h1>
+    <ul>
+        {% for junction in data %}
+            <li>
+                <h3>{{ junction.name }}</h3>
+                <p>Roads: {{ junction.roads|join:', ' }}</p> 
+                <p>Logged Vehicles: {{ junction.logged_vehicles|join:', ' }}</p>
+            </li>
+        {% empty %}
+            <p>No junctions available.</p>
+        {% endfor %}
+    </ul>
+    
+    <a href="{% url 'home' %}">Back to Home</a>
+</body>
+</html>
+

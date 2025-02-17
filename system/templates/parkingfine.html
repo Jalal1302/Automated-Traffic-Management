@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Parking Violation</title>
+</head>
+<body>
+    <h1>Register a Parking Violation</h1>
+
+
+    {% if error %}
+    <div>{{ error }}</div>
+    {% endif %}
+
+    {% if message %}
+    <div>{{ message }}</div>
+    {% endif %}
+    <br><br>
+    <form action="{% url 'parkingfine' %}" method="get">
+        <label for="vehicle_plate">Vehicle Number Plate:</label>
+        <select name="vehicle_plate" id="vehicle_plate" required>
+            <option value="">Select a vehicle</option>
+            {% for vehicle in vehicle_plates %}
+                <option value="{{ vehicle.number_plate }}">
+                    {{ vehicle.number_plate }} - {{ vehicle.owner_name }}
+                </option>
+            {% endfor %}
+        </select><br><br>
+
+        <label for="junction_name">Junction Name (Optional):</label>
+        <input type="text" id="junction_name" name="junction_name"><br><br>
+        
+        <label for="description">Violation Description:</label>
+        <textarea id="description" name="description" required></textarea><br><br>
+
+        <label for="severity">Severity Level: LOW</label>
+        <br><br>
+
+        <button type="submit">Submit</button>
+    </form>
+    <br><br>
+    <a href="{% url 'home' %}">Back to Home</a>
+
+</body>
+</html>

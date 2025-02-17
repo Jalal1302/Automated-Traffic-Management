@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vehicles with Violations</title>
+</head>
+<body>
+    <h2>Vehicles with Violations</h2>
+
+    {% if vehicles %}
+        <table border="1">
+            <tr>
+                <th>Number Plate</th>
+                <th>Owner Name</th>
+                <th>Total Violations</th>
+            </tr>
+            {% for vehicle in vehicles %}
+            <tr>
+                <td>{{ vehicle.number_plate }}</td>
+                <td>{{ vehicle.owner_name }}</td>
+                <td>{{ vehicle.violation_set.count }}</td>
+            </tr>
+            {% endfor %}
+        </table>
+    {% else %}
+        <p>No vehicles with recorded violations.</p>
+    {% endif %}
+</body>
+</html>

@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Traffic Analysis</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+</head>
+<body>
+    <div class="container">
+        <h1>Traffic Analysis</h1>
+
+        <!-- Analysis Form -->
+        <form method="GET">
+            <label for="junction">Junction Name:</label>
+            <input type="text" id="junction" name="junction" value="{{ request.GET.junction }}" required>
+            
+            <label for="date">Date:</label>
+            <input type="text" id="date" name="date" value="{{ request.GET.date }}" required>
+            
+            <button type="submit">Analyze Traffic</button>
+        </form>
+
+        <!-- Error Handling -->
+        {% if error %}
+        <div class="error">
+            <h3>Error</h3>
+            <p>{{ error }}</p>
+            {% if details %}
+            <p>{{ details }}</p>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        <!-- Traffic Analysis Results -->
+        {% if hourly_data %}
+        <div>
+            <h2>Traffic Data for {{ junction }} on {{ date }}</h2>
+
+            <!-- Daily Summary -->
+            {% if daily_summary %}
+            <div class="summary">
+                <h3>Daily Summary</h3>
+                <p><strong>Total Vehicles:</strong> {{ daily_summary.total_vehicles }}</p>
+                <p><strong>Peak Hour:</strong> {{ daily_summary.peak_hour }}</p>
+                <p><strong>Peak Count:</strong> {{ daily_summary.peak_count }}</p>
+                <p><strong>Average Vehicles Per Hour:</strong> {{ daily_summary.average_vehicles }}</p>
+            </div>
+            {% endif %}
+
+            <!-- Hourly Breakdown -->
+            <h3>Hourly Traffic Data</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Hour</th>
+                        <th>Vehicle Count</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for data in hourly_data %}
+                    <tr>
+                        <td>{{ data.hour }}:00</td>
+                        <td>{{ data.vehicle_count }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+        
+        <br><br>
+        <a href="{% url 'home' %}">Back to Home</a>
+    </div>
+</body>
+</html>

@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Road List</title>
+</head>
+<body>
+    <h1>All Roads</h1>
+
+    <ul>
+        {% for road in data.roads %}
+          <li>{{ road }}</li>
+        {% endfor %}
+      </ul>
+      <br><br>
+    <a href="{% url 'home' %}">Back to Home</a>
+</body>
+</html>

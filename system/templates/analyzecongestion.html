@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Congestion Analysis</title>
+</head>
+<body>
+    <div>
+        <h1>Congestion Analysis</h1>
+
+        <!-- Form for changing the days and threshold values -->
+        <form method="get" action="{% url 'analyzecongestion' %}">
+            <label for="days">Days to Analyze:</label>
+            <input type="number" value = "1" id="days" name="days" value="{{ days }}" min="1" max = "10" required>
+            <br><br>
+            <label for="threshold">Congestion Threshold (vehicles per hour):</label>
+            <input type="number" value = "5" id="threshold" name="threshold" value="{{ threshold }}" min="1" max = "25" required>
+            <br><br>
+
+            <button type="submit">Submit</button>
+        </form>
+
+        {% if message %}
+        <div>
+            <h2>{{ message }}</h2>
+            {% if analysis_period %}
+            <p><strong>Analysis Period:</strong> {{ analysis_period }}</p>
+            {% endif %}
+            {% if congestion_threshold %}
+            <p><strong>Congestion Threshold:</strong> {{ congestion_threshold }}</p>
+            {% endif %}
+        </div>
+        {% endif %}
+        
+
+        {% if congestion_analysis%}
+    
+        <div>
+            <h3>Congestion Prone Areas</h3>
+            <table border="1">
+                <thead>
+                    <tr>
+                        <th>Junction Name</th>
+                        <th>Risk Level</th>
+                        <th>Total Peak Hours</th>
+                        <th>Average Daily Vehicles</th>
+                        <th>Max Hourly Vehicles</th>
+                        <th>Congestion Frequency (%)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for analysis in congestion_analysis %}
+                        <tr>
+                            <td>{{ analysis.junction_name }}</td>
+                            <td>{{ analysis.risk_level }}</td>
+                            <td>{{ analysis.stats.total_peak_hours }}</td>
+                            <td>{{ analysis.stats.avg_daily_vehicles }}</td>
+                            <td>{{ analysis.stats.max_hourly_vehicles }}</td>
+                            <td>{{ analysis.stats.congestion_frequency }}%</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <p>No congestion data available.</p>
+    {% endif %}
+
+        {% if error %}
+        <div>
+            <h3>Error</h3>
+            <p>{{ error }}</p>
+            {% if details %}
+            <p>{{ details }}</p>
+            {% endif %}
+        </div>
+        {% endif %}
+
+    </div>
+
+    <br><br>
+    <a href="{% url 'home' %}">Back to Home</a>
+</body>
+</html>

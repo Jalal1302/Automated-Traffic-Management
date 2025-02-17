@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Add Junction</title>
+</head>
+
+<body>
+<h1>Create Junction</h1>
+
+
+    
+<form method="get" action="{% url 'addjunction' %}">
+    <input type="text" name="name" placeholder="Enter junction name" required>
+    <br><br>
+    <label for="num_roads">Number of Roads:</label>
+
+
+    <select id="num_roads" name="num_roads" onchange="generateRoadInputs()" required>
+        <option value="2">2</option>
+        <option value="3">3</option>
+        <option value="4">4</option>
+        <option value="5">5</option>
+
+    </select>
+    
+
+    <div id="road_inputs">
+
+        <input type="text" name="roads" placeholder="Enter first road" required>
+        <input type="text" name="roads" placeholder="Enter second road" required>
+    </div>
+    <br><br>
+    <button type="submit">Submit</button>
+    <br><br>
+    <a href="{% url 'home' %}">Back to Home</a>
+</form>
+</body>
+<script>
+    function generateRoadInputs() {
+        const numRoads = document.getElementById('num_roads').value;
+        const roadInputsContainer = document.getElementById('road_inputs');
+
+        roadInputsContainer.innerHTML = '';
+        for (let i = 0; i < numRoads; i++) {
+            let roadInput = document.createElement('input');
+            roadInput.type = 'text';
+            roadInput.name = 'roads';
+            roadInput.placeholder = 'Enter road ' + (i + 1);
+            roadInputsContainer.appendChild(roadInput);
+        }
+    }
+    
+</script>

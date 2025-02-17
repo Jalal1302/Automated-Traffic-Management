@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Log Vehicle at Junction</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body>
+
+    <h1>Log Vehicle at Junction</h1>
+
+    <!-- Display Error Messages -->
+    {% if error %}
+    <div>
+        <p><strong>Error:</strong> {{ error }}</p>
+    </div>
+    {% endif %}
+
+    <!-- Display Success Message -->
+    {% if message %}
+    <div>
+        <p><strong>{{ message }}</strong></p>
+    </div>
+    {% endif %}
+
+    <!-- Display Violation Details (if any) -->
+    {% if violation %}
+    <div>
+        <h3>Traffic Violation Recorded</h3>
+        <p><strong>Type:</strong> {{ violation.type }}</p>
+        <p><strong>Severity:</strong> {{ violation.severity }}</p>
+        <p><strong>Fine Amount:</strong> ${{ violation.fine_amount }}</p>
+        <p><strong>Description:</strong> {{ violation.description }}</p>
+    </div>
+    {% endif %}
+
+    <!-- Form for Logging Vehicle -->
+    <form method="POST">
+        {% csrf_token %}
+
+        <label for="junction">Junction Name:</label>
+        <input type="text" id="junction" name="junction" required>
+
+        <br><br>
+
+        <label for="vehicle">Vehicle Number Plate:</label>
+        <select id="vehicle" name="vehicle" required>
+            <option value="">-- Select Vehicle --</option>
+            {% for v in vehicles %}
+            <option value="{{ v.number_plate }}">{{ v.number_plate }}</option>
+            {% endfor %}
+        </select>
+
+        <br><br>
+
+        <label for="entry_road">Entry Road Name:</label>
+        <input type="text" id="entry_road" name="entry_road" required>
+
+        <br><br>
+
+        <button type="submit">Log Vehicle</button>
+    </form>
+
+    <br><br>
+    <a href="{% url 'home' %}">Back to Home</a>
+
+</body>
+</html>

@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Red Light Violations</title>
+    <script>
+        function fetchViolations() {
+            fetch('/log_vehicle_at_junction/')
+                .then(response => response.json())
+                .then(data => {
+                    const resultDiv = document.getElementById("result");
+                    if (data.error) {
+                        resultDiv.innerHTML = `<p style="color:red;">Error: ${data.error}</p>`;
+                    } else if (data.violations.length === 0) {
+                        resultDiv.innerHTML = `<p>No red light violations recorded.</p>`;
+                    } else {
+                        let table = `
+                            <table border="1">
+                                <tr>
+                                    <th>Vehicle</th>
+                                    <th>Junction</th>
+                                    <th>Road</th>
+                                    <th>Fine</th>
+                                    <th>Time</th>
+                                </tr>`;
+
+                        data.violations.forEach(v => {
+                            table += `
+                                <tr>
+                                    <td>${v.vehicle}</td>
+                                    <td>${v.junction}</td>
+                                    <td>${v.road}</td>
+                                    <td>$${v.fine_amount}</td>
+                                    <td>${v.timestamp}</td>
+                                </tr>`;
+                        });
+
+                        table += `</table>`;
+                        resultDiv.innerHTML = table;
+                    }
+                })
+                .catch(error => {
+                    document.getElementById("result").innerHTML = `<p style="color:red;">An error occurred: ${error}</p>`;
+                });
+        }
+    </script>
+</head>
+<body onload="fetchViolations()">
+    <h2>Red Light Violations</h2>
+    <div id="result">Loading violations...</div>
+</body>
+</html>
