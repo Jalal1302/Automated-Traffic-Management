@@ -10,5 +10,6 @@ urlpatterns = [
     path('getjunction/', views.get_junctions, name = 'getjunction'),
     path('logvehicle/', views.log_vehicle_at_junction, name = 'logvehicle'),
     path('trafficanalysis/', views.get_traffic_analysis, name = 'trafficanalysis'),
-    path('getcongestion', views.analyze_congestion, name = 'getcongestion'),
+    path('getcongestion/', views.analyze_congestion, name = 'getcongestion'),
+    path('getprediction/', views.predict_and_suggest_routes, name = 'getprediction'),
 ]

@@ -2,9 +2,10 @@ from django.shortcuts import render
 from django.http import JsonResponse
 from django.core.exceptions import ValidationError
 import json
-from .models import Vehicle, Road, Junction, JunctionVehicleLog, Violation, TrafficAnalytics
+from .models import Vehicle, Road, Junction, JunctionVehicleLog, Violation, TrafficAnalytics, TrafficPrediction
 import requests
 from datetime import datetime
+from django.utils import timezone
 
 # Create your views here.
 
@@ -311,5 +312,52 @@ def analyze_congestion(request):
         return JsonResponse({
             "error": "An unexpected error occurred",
             "details": str(e)
+        }, status=500)
+
+def predict_and_suggest_routes(request):
+    """
+    API endpoint to get congestion predictions and alternate routes.
+    """
+    start_junction_name = request.GET.get('start_junction')
+    end_junction_name = request.GET.get('end_junction')
+    
+    if not start_junction_name or not end_junction_name:
+        return JsonResponse({
+            "error": "Both start and end junction names are required."
+        }, status=400)
+    
+    try:
+        start_junction = Junction.objects.get(name=start_junction_name)
+        end_junction = Junction.objects.get(name=end_junction_name)
+        current_time = timezone.now()
+        
+        # Get congestion prediction for start junction
+        congestion_prediction = TrafficPrediction.predict_congestion(
+            start_junction,
+            current_time
+        )
+        
+        # Get alternate routes
+        alternate_routes = TrafficPrediction.get_alternate_routes(
+            start_junction,
+            end_junction,
+            current_time
+        )
+        
+        return JsonResponse({
+            "start_junction": start_junction_name,
+            "end_junction": end_junction_name,
+            "current_time": current_time.strftime("%Y-%m-%d %H:%M:%S"),
+            "congestion_prediction": congestion_prediction,
+            "alternate_routes": alternate_routes
+        })
+        
+    except Junction.DoesNotExist:
+        return JsonResponse({
+            "error": "One or both junctions not found."
+        }, status=404)
+    except Exception as e:
+        return JsonResponse({
+            "error": f"An unexpected error occurred: {str(e)}"
         }, status=500)
 

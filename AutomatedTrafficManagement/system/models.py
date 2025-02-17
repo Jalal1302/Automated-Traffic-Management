@@ -9,6 +9,9 @@ from django.db.models.functions import Cast
 from django.db.models import FloatField
 from django.http import JsonResponse
 import json
+import heapq
+from typing import List, Dict,Set, Tuple
+from collections import defaultdict
 
 class Vehicle(models.Model):
     number_plate = models.CharField(max_length=10, unique=True)
@@ -300,5 +303,271 @@ class TrafficAnalytics(models.Model):
         
         return congestion_prone_areas
 
+class TrafficPrediction:
+    CONGESTION_THRESHOLD = 5  
+    
+    @staticmethod
+    def build_adjacency_list(junctions):
 
+        adj_list = defaultdict(list)
+        for junction in junctions:
+            # Find all junctions that share a road with the current junction
+            connected_junctions = Junction.objects.filter(
+                roads__in=junction.roads.all()
+            ).exclude(id=junction.id)
+            
+            for connected_junction in connected_junctions:
+                adj_list[junction.name].append(connected_junction.name)
+        
+        return adj_list
+
+    @staticmethod
+    def get_current_congestion_state(junction, current_time=None):
+
+        if current_time is None:
+            current_time = timezone.now()
+            
+        # Get the most recent traffic data for this junction
+        current_traffic = TrafficAnalytics.objects.filter(
+            junction=junction,
+            date=current_time.date(),
+            hour=current_time.hour
+        ).first()
+        
+        if current_traffic:
+            is_congested = current_traffic.vehicle_count > TrafficPrediction.CONGESTION_THRESHOLD
+            return {
+                'is_congested': is_congested,
+                'vehicle_count': current_traffic.vehicle_count,
+                'congestion_level': 'HIGH' if current_traffic.vehicle_count > 8 
+                                  else 'MEDIUM' if current_traffic.vehicle_count > 5 
+                                  else 'LOW'
+            }
+        return {
+            'is_congested': False,
+            'vehicle_count': 0,
+            'congestion_level': 'LOW'
+        }
+
+    @staticmethod
+    def predict_congestion(junction, target_datetime=None):
+
+        if target_datetime is None:
+            target_datetime = timezone.now()
+
+        # Get current congestion state
+        current_state = TrafficPrediction.get_current_congestion_state(junction, target_datetime)
+        
+        # Get historical data
+        historical_data = TrafficAnalytics.objects.filter(
+            junction=junction,
+            hour=target_datetime.hour,
+            date__week_day=target_datetime.weekday()
+        ).values('vehicle_count', 'peak_status')
+
+        if not historical_data.exists():
+            return {
+                'probability': 100 if current_state['is_congested'] else 0,
+                'confidence': 'HIGH' if current_state['is_congested'] else 'LOW',
+                'current_state': current_state,
+                'expected_duration': 30 if current_state['is_congested'] else 0,
+                'historical_peak_hours': []
+            }
+
+        # Calculate historical probability
+        total_records = historical_data.count()
+        peak_hours = historical_data.filter(peak_status=True).count()
+        historical_probability = (peak_hours / total_records) * 100
+
+        # Blend historical and current data
+        if current_state['is_congested']:
+            # If currently congested, increase probability significantly
+            final_probability = min(100, historical_probability * 1.5)
+            confidence = 'HIGH'
+        else:
+            # If not currently congested, reduce historical probability
+            final_probability = historical_probability * 0.8
+            confidence = 'HIGH' if total_records > 30 else 'MEDIUM' if total_records > 10 else 'LOW'
+
+        # Get peak hours
+        peak_hours_data = TrafficAnalytics.objects.filter(
+            junction=junction,
+            peak_status=True
+        ).values('hour').annotate(
+            frequency=Count('id')
+        ).order_by('-frequency')[:5]
+
+        return {
+            'probability': round(final_probability, 2),
+            'confidence': confidence,
+            'current_state': current_state,
+            'expected_duration': 30 if current_state['is_congested'] else 15,
+            'historical_peak_hours': [item['hour'] for item in peak_hours_data]
+        }
+
+    @staticmethod
+    def find_k_shortest_paths(start: str, end: str, adj_list: Dict[str, List[str]], current_time, k: int = 3) -> List[List[str]]:
+
+        if start not in adj_list or end not in adj_list:
+            return []
+
+        def get_edge_weight(current_junction, next_junction):
+            """Calculate edge weight based on current congestion"""
+            try:
+                current = Junction.objects.get(name=current_junction)
+                next_j = Junction.objects.get(name=next_junction)
+                
+                current_state = TrafficPrediction.get_current_congestion_state(current, current_time)
+                next_state = TrafficPrediction.get_current_congestion_state(next_j, current_time)
+                
+                weight = 1.0  # Base weight
+                
+                # Heavily penalize currently congested junctions
+                if current_state['is_congested']:
+                    weight *= 3.0
+                if next_state['is_congested']:
+                    weight *= 3.0
+                    
+                # Add smaller penalties for medium congestion risk
+                if current_state['congestion_level'] == 'MEDIUM':
+                    weight *= 1.5
+                if next_state['congestion_level'] == 'MEDIUM':
+                    weight *= 1.5
+                    
+                return weight
+                
+            except Junction.DoesNotExist:
+                return float('inf')
+
+        # Priority queue of (total_weight, current_weight, path)
+        pq = [(0, 0, [start])]
+        paths = []
+        visited = set()
+
+        while pq and len(paths) < k:
+            total_weight, current_weight, path = heapq.heappop(pq)
+            current = path[-1]
+
+            if current == end:
+                paths.append(path)
+                continue
+
+            if current in visited:
+                continue
+
+            visited.add(current)
+
+            for neighbor in adj_list[current]:
+                if neighbor not in path:  # Avoid cycles
+                    edge_weight = get_edge_weight(current, neighbor)
+                    new_total_weight = current_weight + edge_weight
+                    heapq.heappush(pq, (new_total_weight, new_total_weight, path + [neighbor]))
+
+        return paths
+
+    @staticmethod
+    def get_alternate_routes(start_junction, end_junction, current_time=None):
+
+        if current_time is None:
+            current_time = timezone.now()
+
+        # Get all junctions
+        junctions = Junction.objects.prefetch_related('roads').all()
+        
+        # Build adjacency list
+        adj_list = TrafficPrediction.build_adjacency_list(junctions)
+        
+        routes = TrafficPrediction.find_k_shortest_paths(
+            start_junction.name,
+            end_junction.name,
+            adj_list,
+            current_time
+        )
+
+        if not routes:
+            return []
+
+        return TrafficPrediction._format_route_suggestions(routes, current_time)
+
+    @staticmethod
+    def _format_route_suggestions(routes: List[List[str]], current_time) -> List[Dict]:
+
+        formatted_routes = []
+        
+        for route in routes:
+            total_congestion_prob = 0
+            route_details = []
+            currently_congested_count = 0
+            
+            for i in range(len(route) - 1):
+                junction = Junction.objects.get(name=route[i])
+                next_junction = Junction.objects.get(name=route[i + 1])
+                
+                # Get current congestion states
+                current_congestion = TrafficPrediction.get_current_congestion_state(junction, current_time)
+                if current_congestion['is_congested']:
+                    currently_congested_count += 1
+                
+                # Get connecting road
+                connecting_road = Road.objects.filter(
+                    junction__name=route[i]
+                ).filter(
+                    junction__name=route[i + 1]
+                ).first()
+                
+                congestion_data = TrafficPrediction.predict_congestion(junction, current_time)
+                total_congestion_prob += congestion_data['probability']
+                
+                route_details.append({
+                    'junction': route[i],
+                    'next_junction': route[i + 1],
+                    'connecting_road': connecting_road.name if connecting_road else 'Unknown',
+                    'current_congestion_state': current_congestion,
+                    'predicted_congestion_probability': congestion_data['probability'],
+                    'current_light_status': connecting_road.current_light_status if connecting_road else 'Unknown'
+                })
+            
+            avg_congestion_prob = total_congestion_prob / (len(route) - 1)
+            
+            formatted_routes.append({
+                'route': route,
+                'route_details': route_details,
+                'total_junctions': len(route),
+                'currently_congested_junctions': currently_congested_count,
+                'average_congestion_probability': round(avg_congestion_prob, 2),
+                'estimated_time': TrafficPrediction._estimate_travel_time(
+                    route_details,
+                    avg_congestion_prob,
+                    currently_congested_count
+                ),
+                'route_status': 'AVOID' if currently_congested_count > 0 else 'RECOMMENDED'
+            })
+        
+        # Sort routes prioritizing those with no current congestion
+        return sorted(formatted_routes, 
+                     key=lambda x: (x['currently_congested_junctions'], x['estimated_time']))
+
+    @staticmethod
+    def _estimate_travel_time(route_details: List[Dict], avg_congestion_prob: float, 
+                            congested_junctions: int) -> int:
+
+        BASE_TIME_PER_JUNCTION = 3  # minutes
+        
+        # Calculate basic time based on number of junctions
+        base_time = len(route_details) * BASE_TIME_PER_JUNCTION
+        
+        # Add time based on historical congestion probability
+        historical_congestion_time = base_time * (avg_congestion_prob / 100)
+        
+        # Add significant delay for currently congested junctions
+        current_congestion_time = congested_junctions * 10  # 10 minutes per congested junction
+        
+        # Add time for red lights
+        red_light_count = sum(
+            1 for detail in route_details 
+            if detail['current_light_status'] == 'RED'
+        )
+        red_light_time = red_light_count * 1  # 1 minute per red light
+        
+        return round(base_time + historical_congestion_time + current_congestion_time + red_light_time)
 
