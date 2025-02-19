@@ -16,5 +16,7 @@ Laurent Bialylew
 ## Core features
 - Registration of a vehicle
 - Display vehicles list
-- Addition of a road
-- Display roads list
+- Addition of a road and junctions
+- Display lists of roads and junction
+- See log of the vehicles in junction
+- See the junction and congestion analysis
