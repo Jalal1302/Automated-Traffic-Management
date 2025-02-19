@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Speeding Violation</title>
+</head>
+<body>
+    <h1>Record Speeding Violation</h1>
+
+    {% if error %}
+    <div>
+        {{ error }}
+    </div>
+    {% endif %}
+
+    {% if message %}
+    <div>
+        {{ message }}
+    </div>
+    {% endif %}
+
+    <form method="GET">
+        <div>
+            <label>Vehicle Plate:</label>
+            <select name="vehicle_plate" required>
+                <option value="">Select a vehicle</option>
+                {% for vehicle in vehicle_plates %}
+                <option value="{{ vehicle.number_plate }}">
+                    {{ vehicle.number_plate }} - {{ vehicle.owner_name }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+        <br>
+        <div>
+            <label>Road:</label>
+            <select name="road_name" required>
+                <option value="">Select a road</option>
+                {% for road in roads %}
+                <option value="{{ road.name }}">{{ road.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <br>
+        <div>
+            <label>Recorded Speed (km/h):</label>
+            <input type="number" name="speed" step="5" value="30" min =30 max = 120 required>
+        </div>
+        <br>
+        <div>
+            <label>Speed Limit (km/h):</label>
+            <input type="number" name="speed_limit" step="30" value="30" min = 30 max = 120 required>
+        </div>
+        <br>
+        <button type="submit">Record Violation</button>
+    </form>
+
+    {% if violation %}
+    <div>
+        <h2>Violation Details</h2>
+        <p>Recorded Speed: {{ violation.speed }} km/h</p>
+        <p>Speed Limit: {{ violation.speed_limit }} km/h</p>
+        <p>Exceeded By: {{ violation.difference }} km/h</p>
+        <p>Severity: {{ violation.severity }}</p>
+        <p>Fine Amount: ${{ violation.fine_amount }}</p>
+        <p>Time: {{ violation.timestamp }}</p>
+    </div>
+    {% endif %}
+
+    {% if speed_info %}
+    <div>
+        <h2>Speed Check Results</h2>
+        <p>Vehicle was traveling at {{ speed_info.recorded_speed }} km/h in a {{ speed_info.speed_limit }} km/h zone.</p>
+        <p>No violation: Vehicle was within speed limit.</p>
+    </div>
+    {% endif %}
+
+    <br>
+    <a href="{% url 'home' %}">Back to Home</a>
+</body>
+</html>
