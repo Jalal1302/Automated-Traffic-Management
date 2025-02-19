@@ -13,5 +13,6 @@ urlpatterns = [
     path('violatorlist/',views.vehicles_with_violations,name = 'violatorlist'),
     path('trafficanalysis/',views.get_traffic_analysis, name ='trafficanalysis'), 
     path('analyzecongestion/',views.analyze_congestion,name = 'analyzecongestion'),
+    path('speedingviolation/', views.speeding_violation, name='speedingviolation'),
     
 ]

@@ -258,6 +258,84 @@ def parking_fine(request):
 
     return render(request, "parkingfine.html", context)
 
+def speeding_violation(request):
+    vehicle_plate = request.GET.get('vehicle_plate', '')
+    road_name = request.GET.get('road_name', '')
+    speed = request.GET.get('speed', '')
+    speed_limit = request.GET.get('speed_limit', '')
+    
+    context = {}
+    context["vehicle_plates"] = Vehicle.objects.all()
+    context["roads"] = Road.objects.all()
+
+    if not vehicle_plate:
+        context["error"] = "Vehicle number plate is required."
+        return render(request, "speedingviolation.html", context)
+
+    if not road_name:
+        context["error"] = "Road name is required."
+        return render(request, "speedingviolation.html", context)
+
+    if not speed or not speed_limit:
+        context["error"] = "Both speed and speed limit are required."
+        return render(request, "speedingviolation.html", context)
+
+    try:
+        speed = float(speed)
+        speed_limit = float(speed_limit)
+    except ValueError:
+        context["error"] = "Speed and speed limit must be numbers."
+        return render(request, "speedingviolation.html", context)
+
+    try:
+        vehicle = Vehicle.objects.get(number_plate=vehicle_plate)
+        road = Road.objects.get(name=road_name)
+
+        # Calculate severity based on how much the speed limit was exceeded
+        if speed > speed_limit:
+            speed_difference = speed - speed_limit
+            if speed_difference > 30:
+                severity = 'HIGH'
+            elif speed_difference > 15:
+                severity = 'MEDIUM'
+            else:
+                severity = 'LOW'
+
+            description = f"Vehicle was recorded at {speed} km/h in a {speed_limit} km/h zone on {road.name}"
+            
+            violation = Violation.create(
+                vehicle=vehicle,
+                violation_type='SPEEDING',
+                severity=severity,
+                junction=None,
+                description=description
+            )
+
+            context["message"] = "Speeding violation registered successfully."
+            context["violation"] = {
+                "speed": speed,
+                "speed_limit": speed_limit,
+                "difference": speed_difference,
+                "severity": severity,
+                "fine_amount": violation.fine_amount,
+                "timestamp": violation.timestamp
+            }
+        else:
+            context["message"] = "No violation: Vehicle was within speed limit."
+            context["speed_info"] = {
+                "recorded_speed": speed,
+                "speed_limit": speed_limit
+            }
+
+    except Vehicle.DoesNotExist:
+        context["error"] = "Vehicle not found."
+    except Road.DoesNotExist:
+        context["error"] = "Road not found."
+    except Exception as e:
+        context["error"] = f"An error occurred: {str(e)}"
+
+    return render(request, "speedingviolation.html", context)
+
 def vehicles_with_violations(request):
 
     vehicles = Vehicle.objects.filter(violation__isnull=False).distinct()
