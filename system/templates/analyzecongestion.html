@@ -4,11 +4,20 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Congestion Analysis</title>
+    <style>
+        .notification {
+            background-color: #d4edda;
+            color: #155724;
+            padding: 10px;
+            border-radius: 5px;
+            margin: 15px 0;
+            border: 1px solid #c3e6cb;
+        }
+    </style>
 </head>
 <body>
     <div>
         <h1>Congestion Analysis</h1>
-
         <!-- Form for changing the days and threshold values -->
         <form method="get" action="{% url 'analyzecongestion' %}">
             <label for="days">Days to Analyze:</label>
@@ -17,13 +26,16 @@
             <label for="threshold">Congestion Threshold (vehicles per hour):</label>
             <input type="number" value = "5" id="threshold" name="threshold" value="{{ threshold }}" min="1" max = "25" required>
             <br><br>
-
             <button type="submit">Submit</button>
         </form>
-
         {% if message %}
         <div>
             <h2>{{ message }}</h2>
+            {% if "Email notifications sent" in message %}
+            <div class="notification">
+                <p><strong>✓ Email notifications sent successfully!</strong> Vehicle owners have been notified about congestion conditions and provided with alternative routes.</p>
+            </div>
+            {% endif %}
             {% if analysis_period %}
             <p><strong>Analysis Period:</strong> {{ analysis_period }}</p>
             {% endif %}
@@ -33,9 +45,7 @@
         </div>
         {% endif %}
         
-
         {% if congestion_analysis%}
-    
         <div>
             <h3>Congestion Prone Areas</h3>
             <table border="1">
@@ -47,6 +57,7 @@
                         <th>Average Daily Vehicles</th>
                         <th>Max Hourly Vehicles</th>
                         <th>Congestion Frequency (%)</th>
+                        <th>Status</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -58,6 +69,13 @@
                             <td>{{ analysis.stats.avg_daily_vehicles }}</td>
                             <td>{{ analysis.stats.max_hourly_vehicles }}</td>
                             <td>{{ analysis.stats.congestion_frequency }}%</td>
+                            <td>
+                                {% if analysis.risk_level in 'MODERATE,HIGH,SEVERE' %}
+                                <span style="color: green;">✓ Notifications sent</span>
+                                {% else %}
+                                <span style="color: gray;">No notification needed</span>
+                                {% endif %}
+                            </td>
                         </tr>
                     {% endfor %}
                 </tbody>
@@ -66,7 +84,6 @@
     {% else %}
         <p>No congestion data available.</p>
     {% endif %}
-
         {% if error %}
         <div>
             <h3>Error</h3>
@@ -76,10 +93,9 @@
             {% endif %}
         </div>
         {% endif %}
-
     </div>
-
     <br><br>
     <a href="{% url 'home' %}">Back to Home</a>
 </body>
 </html>
+

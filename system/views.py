@@ -4,7 +4,7 @@ from django.core.exceptions import ValidationError
 import json
 from .models import Vehicle, Road, Junction, JunctionVehicleLog, Violation, TrafficAnalytics
 import requests
-from datetime import datetime
+from datetime import datetime, timedelta
 from django.utils import timezone
 from django.core.mail import send_mail
 # Create your views here.
@@ -23,33 +23,79 @@ def home(request):
 
 
 def add_vehicle(request):
-    number_plate = request.GET.get('plate', '')
-    owner_name = request.GET.get('owner', '')
-    vehicle_type = request.GET.get('type', '')
-    owner_email = request.GET.get('email', '')
-    if not number_plate:
-        return render(request,"addvehicle.html",{"error": "Vehicle plate number is required."}, status=400)
-    if not owner_name:
-        return render(request,"addvehicle.html",{"error": "Owner name is required."}, status=400)
-    if not vehicle_type:
-        return render(request,"addvehicle.html",{"error": "Vehicle type is required."}, status=400)
-    if not owner_email:
-        return render(request,"addvehicle.html",{"error": "Owner Email is requried."}, status=400)
-
-    try:
-        vehicle, created = Vehicle.objects.get_or_create(number_plate=number_plate, owner_name=owner_name, vehicle_type=vehicle_type,owner_email=owner_email)
-        return render(request, "addvehicle.html",{
-            "message": "Vehicle registered successfully!" if created else "Vehicle already registered.",
-            "Vechicle": {
-                "Plate": vehicle.number_plate,
-                "Owner": vehicle.owner_name,
-                "Type": vehicle.vehicle_type,
-                "Email": vehicle.owner_email
-            }
-        })
+    vehicle_types = Vehicle.VEHICLE_TYPES
     
-    except Exception as e:
-        return render(request,"addvehicle.html",{"error": f"An error occurred: {str(e)}"}, status = 500)
+    if request.method == 'GET' and any(param in request.GET for param in ['plate', 'owner', 'type', 'email']):
+        number_plate = request.GET.get('plate', '')
+        owner_name = request.GET.get('owner', '')
+        vehicle_type = request.GET.get('type', '')
+        owner_email = request.GET.get('email', '')
+        
+        if not number_plate:
+            return render(request, "addvehicle.html", {
+                "error": "Vehicle plate number is required.",
+                "vehicle_types": vehicle_types
+            }, status=400)
+        if not owner_name:
+            return render(request, "addvehicle.html", {
+                "error": "Owner name is required.",
+                "vehicle_types": vehicle_types
+            }, status=400)
+        if not vehicle_type:
+            return render(request, "addvehicle.html", {
+                "error": "Vehicle type is required.",
+                "vehicle_types": vehicle_types
+            }, status=400)
+        if not owner_email:
+            return render(request, "addvehicle.html", {
+                "error": "Owner Email is required.",
+                "vehicle_types": vehicle_types
+            }, status=400)
+
+        valid_types = [type_code for type_code, _ in vehicle_types]
+        if vehicle_type not in valid_types:
+            return render(request, "addvehicle.html", {
+                "error": "Invalid vehicle type selected.",
+                "vehicle_types": vehicle_types
+            }, status=400)
+
+        try:
+            vehicle, created = Vehicle.objects.get_or_create(
+                number_plate=number_plate,
+                defaults={
+                    'owner_name': owner_name,
+                    'vehicle_type': vehicle_type,
+                    'owner_email': owner_email
+                }
+            )
+            
+            if not created:
+                vehicle.owner_name = owner_name
+                vehicle.vehicle_type = vehicle_type
+                vehicle.owner_email = owner_email
+                vehicle.save()
+                
+            return render(request, "addvehicle.html", {
+                "message": "Vehicle registered successfully!" if created else "Vehicle updated successfully.",
+                "vehicle": {
+                    "Plate": vehicle.number_plate,
+                    "Owner": vehicle.owner_name,
+                    "Type": vehicle.get_vehicle_type_display(),  
+                    "Email": vehicle.owner_email
+                },
+                "vehicle_types": vehicle_types
+            })
+        
+        except Exception as e:
+            return render(request, "addvehicle.html", {
+                "error": f"An error occurred: {str(e)}",
+                "vehicle_types": vehicle_types
+            }, status=500)
+    
+    
+    return render(request, "addvehicle.html", {"vehicle_types": vehicle_types})
+
+
     
 
 def add_roads(request):
@@ -427,22 +473,42 @@ def analyze_congestion(request):
             days_to_analyze=days
         )
 
-        if not congestion_analysis:
+        if congestion_analysis:
+            # Send email notifications for congested junctions
+            for area in congestion_analysis:
+                if area['risk_level'] in ['MODERATE', 'HIGH', 'SEVERE']:
+                    # Get affected vehicles
+                    junction = Junction.objects.get(name=area['junction_name'])
+                    affected_vehicles = Vehicle.objects.filter(
+                        junctionvehiclelog__junction=junction,
+                        junctionvehiclelog__timestamp__gte=timezone.now() - timedelta(days=days)
+                    ).distinct()
+                    
+                    # Find alternative routes
+                    alternative_routes = _find_alternative_routes(junction)
+                    
+                    # Send notification to each vehicle owner
+                    for vehicle in affected_vehicles:
+                        send_congestion_email(
+                            vehicle.owner_email,
+                            vehicle.owner_name,
+                            area,
+                            junction.name,
+                            alternative_routes
+                        )
             
+            return render(request, "analyzecongestion.html", {
+                "message": "Congestion analysis completed successfully. Email notifications sent.",
+                "analysis_period": f"Last {days} days",
+                "congestion_threshold": f"{threshold} vehicles per hour",
+                "congestion_analysis": congestion_analysis
+            })
+        else:
             return render(request, "analyzecongestion.html", {
                 "message": "No congestion data available for the specified period",
                 "data": [],
             })
-        if congestion_analysis:
-            return render(request, "analyzecongestion.html", {
-            "message": "Congestion analysis completed successfully",
-            "analysis_period": f"Last {days} days",
-            "congestion_threshold": f"{threshold} vehicles per hour",
-            "congestion_analysis": congestion_analysis
-            })
             
-
-        
     except ValueError as e:
         return render(request, "analyzecongestion.html", {
             "error": "Invalid parameter",
@@ -454,3 +520,78 @@ def analyze_congestion(request):
             "error": "An unexpected error occurred",
             "details": str(e)
         })
+
+def _find_alternative_routes(congested_junction):
+    """Find alternative routes to avoid congested junction"""
+    # Get all roads connected to the congested junction
+    congested_roads = set(congested_junction.roads.all())
+    
+    # Find other junctions that aren't congested
+    alternative_routes = []
+    
+    # Get other junctions
+    other_junctions = Junction.objects.exclude(id=congested_junction.id)
+    
+    for junction in other_junctions:
+        # Simple alternative route suggestion
+        alternative_routes.append({
+            'route': f"Use {junction.name} junction instead",
+            'via': ", ".join([road.name for road in junction.roads.all()[:2]])
+        })
+        
+        # Limit to 3 alternative routes
+        if len(alternative_routes) >= 3:
+            break
+            
+    # If no alternatives found, suggest a generic detour
+    if not alternative_routes:
+        alternative_routes.append({
+            'route': "Consider delaying your journey or using main highways",
+            'via': "Main city bypass"
+        })
+        
+    return alternative_routes
+
+def send_congestion_email(email, owner_name, congestion_data, junction_name, alternative_routes):
+    """Send email notification about congestion with alternative routes"""
+    try:
+        subject = f"Traffic Alert: Congestion at {junction_name}"
+        
+        message = f"""
+Dear {owner_name},
+
+We've detected significant congestion at {junction_name}.
+
+Congestion Details:
+- Risk Level: {congestion_data['risk_level']}
+- Average Daily Vehicles: {congestion_data['stats']['avg_daily_vehicles']}
+- Congestion Frequency: {congestion_data['stats']['congestion_frequency']}%
+
+Suggested Alternative Routes:
+"""
+
+        for route in alternative_routes:
+            message += f"- {route['route']} via {route['via']}\n"
+            
+        message += """
+Please plan your journey accordingly.
+
+Regards,
+Traffic Management System
+"""
+
+        send_mail(
+            subject,
+            message,
+            'laubia20@gmail.com',  # From email (use your system email)
+            [email],  # To email
+            fail_silently=False,
+        )
+        
+        return True
+        
+    except Exception as e:
+        print(f"Failed to send email to {email}: {str(e)}")
+        return False
+
+
