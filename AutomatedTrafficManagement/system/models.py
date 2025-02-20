@@ -13,10 +13,21 @@ import heapq
 from typing import List, Dict,Set, Tuple
 from collections import defaultdict
 
+
+
+
+# models.py update
 class Vehicle(models.Model):
+    VEHICLE_TYPES = [
+        ('CAR', 'Car'),
+        ('BUS', 'Bus'),
+        ('TRUCK', 'Truck'),
+        ('EMERGENCY', 'Emergency Vehicle'),
+    ]
+    
     number_plate = models.CharField(max_length=10, unique=True)
     owner_name = models.CharField(max_length=100)
-    vehicle_type = models.CharField(max_length=10)
+    vehicle_type = models.CharField(max_length=10, choices=VEHICLE_TYPES, default='CAR')
     registration_date = models.DateTimeField(auto_now_add=True)
     owner_email = models.CharField(max_length=100)
 
@@ -24,7 +35,7 @@ class Vehicle(models.Model):
         return f"{self.number_plate} - {self.owner_name}"
     
     @classmethod
-    def create(cls, number_plate, owner_name, vehicle_type,owner_email):
+    def create(cls, number_plate, owner_name, vehicle_type, owner_email):
         vehicle = cls(
             number_plate=number_plate,
             owner_name=owner_name,
@@ -33,6 +44,8 @@ class Vehicle(models.Model):
         )
         vehicle.save()
         return vehicle
+
+
 
 class Road(models.Model):
     LIGHT_STATUS = [
@@ -570,4 +583,5 @@ class TrafficPrediction:
         red_light_time = red_light_count * 1  # 1 minute per red light
         
         return round(base_time + historical_congestion_time + current_congestion_time + red_light_time)
+
 
