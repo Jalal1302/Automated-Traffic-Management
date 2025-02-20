@@ -13,6 +13,8 @@ Laurent Bialylew
 
 *[Python 3.11](https://www.python.org/downloads/)
 
+*[PostgreSQL Version 16+](https://www.postgresql.org/download/)
+
 ## Core features
 - Registration of a vehicle
 - Display vehicles list
