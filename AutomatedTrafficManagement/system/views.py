@@ -496,7 +496,7 @@ def analyze_congestion(request):
         if congestion_analysis:
             
             return render(request, "analyzecongestion.html", {
-                "message": "Congestion analysis completed successfully. Email notifications sent.",
+                "message": "Congestion analysis completed successfully.",
                 "analysis_period": f"Last {days} days",
                 "congestion_threshold": f"{threshold} vehicles per hour",
                 "congestion_analysis": congestion_analysis

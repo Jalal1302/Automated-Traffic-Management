@@ -31,11 +31,6 @@
         {% if message %}
         <div>
             <h2>{{ message }}</h2>
-            {% if "Email notifications sent" in message %}
-            <div class="notification">
-                <p><strong>✓ Email notifications sent successfully!</strong> Vehicle owners have been notified about congestion conditions and provided with alternative routes.</p>
-            </div>
-            {% endif %}
             {% if analysis_period %}
             <p><strong>Analysis Period:</strong> {{ analysis_period }}</p>
             {% endif %}
@@ -57,7 +52,6 @@
                         <th>Average Daily Vehicles</th>
                         <th>Max Hourly Vehicles</th>
                         <th>Congestion Frequency (%)</th>
-                        <th>Status</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -69,13 +63,6 @@
                             <td>{{ analysis.stats.avg_daily_vehicles }}</td>
                             <td>{{ analysis.stats.max_hourly_vehicles }}</td>
                             <td>{{ analysis.stats.congestion_frequency }}%</td>
-                            <td>
-                                {% if analysis.risk_level in 'MODERATE,HIGH,SEVERE' %}
-                                <span style="color: green;">✓ Notifications sent</span>
-                                {% else %}
-                                <span style="color: gray;">No notification needed</span>
-                                {% endif %}
-                            </td>
                         </tr>
                     {% endfor %}
                 </tbody>
