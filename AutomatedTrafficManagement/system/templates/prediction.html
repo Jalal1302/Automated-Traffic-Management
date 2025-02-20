@@ -4,14 +4,52 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Route Prediction</title>
+    <style>
+        .route-container {
+            border: 1px solid #ccc;
+            padding: 10px;
+            margin-bottom: 15px;
+            background-color: #f9f9f9;
+        }
+        .junction {
+            background-color: #e0e0e0;
+            padding: 5px;
+            border-radius: 3px;
+            display: inline-block;
+            margin: 2px;
+        }
+        .road {
+            color: #555;
+            padding: 0 5px;
+        }
+        .notification-options {
+            border: 1px solid #aad;
+            background-color: #eef;
+            padding: 10px;
+            margin: 15px 0;
+        }
+        .success-message {
+            background-color: #dfd;
+            border: 1px solid #aca;
+            padding: 10px;
+            margin: 10px 0;
+        }
+        .error {
+            color: red;
+            font-weight: bold;
+        }
+        .recommended {
+            border-left: 5px solid green;
+        }
+        .avoid {
+            border-left: 5px solid red;
+        }
+    </style>
 </head>
 <body>
-
-
     <h1>Route Prediction</h1>
-
     <br><br>
-<a href="{% url 'home' %}">Back to Home</a>
+    <a href="{% url 'home' %}">Back to Home</a>
     <form method="GET" action="">
         <label for="start_junction">Start Junction:</label>
         <select id="start_junction" name="start_junction" required>
@@ -22,7 +60,6 @@
                 </option>
             {% endfor %}
         </select>
-
         <label for="end_junction">End Junction:</label>
         <select id="end_junction" name="end_junction" required>
             <option value="">-- Select End Junction --</option>
@@ -32,27 +69,75 @@
                 </option>
             {% endfor %}
         </select>
-
+        
+        <div class="notification-options">
+            <h3>Email Notification Options:</h3>
+            <input type="checkbox" id="send_notifications" name="send_notifications" value="true">
+            <label for="send_notifications">Send route information to my email</label><br><br>
+            
+            <label for="email">Email Address:</label>
+            <input type="email" id="email" name="email" placeholder="your@email.com"><br><br>
+            
+            <label for="vehicle_plate">Vehicle Plate (Optional):</label>
+            <input type="text" id="vehicle_plate" name="vehicle_plate" placeholder="Enter plate number">
+            <small>(If provided, we'll use your registered email and name)</small>
+        </div>
+        
         <button type="submit">Predict Route</button>
     </form>
-
+    
+    {% if notification_sent %}
+    <div class="success-message">
+        <p>Route information has been sent to your email successfully!</p>
+    </div>
+    {% endif %}
+    
     {% if error %}
         <p class="error">{{ error }}</p>
     {% else %}
+        {% if start_junction and end_junction %}
         <h3>From: {{ start_junction }}</h3>
         <h3>To: {{ end_junction }}</h3>
         <p><strong>Current Time:</strong> {{ current_time }}</p>
-
         <h3>Congestion Prediction:</h3>
-        <p>{{ congestion_prediction }}</p>
+        {% if congestion_prediction %}
+        <div style="border: 1px solid #ccc; padding: 10px; margin-bottom: 15px;">
+            <p><strong>Current Status:</strong> 
+                {% if congestion_prediction.current_state.is_congested %}
+                <span style="color: red;">Congested</span>
+                {% else %}
+                <span style="color: green;">Clear</span>
+                {% endif %}
+                ({{ congestion_prediction.current_state.vehicle_count }} vehicles)
+            </p>
+            <p><strong>Congestion Probability:</strong> {{ congestion_prediction.probability }}%</p>
+            <p><strong>Confidence:</strong> {{ congestion_prediction.confidence }}</p>
+            <p><strong>Expected Duration:</strong> {{ congestion_prediction.expected_duration }} minutes</p>
+            
+            {% if congestion_prediction.historical_peak_hours %}
+            <p><strong>Historical Peak Hours:</strong> 
+                {% for hour in congestion_prediction.historical_peak_hours %}
+                {{ hour }}:00{% if not forloop.last %}, {% endif %}
+                {% endfor %}
+            </p>
+            {% endif %}
+        </div>
+        {% endif %}
 
         <h3>Alternate Routes:</h3>
         {% if alternate_routes %}
         {% for route in alternate_routes %}
-        <div class="route-container">
-            <p><strong>Route Status:</strong> {{ route.route_status }}</p>
+        <div class="route-container {% if route.route_status == 'RECOMMENDED' %}recommended{% else %}avoid{% endif %}">
+            <p><strong>Route Status:</strong> 
+                {% if route.route_status == 'RECOMMENDED' %}
+                <span style="color: green;">{{ route.route_status }}</span>
+                {% else %}
+                <span style="color: red;">{{ route.route_status }}</span>
+                {% endif %}
+            </p>
             <p><strong>Estimated Time:</strong> {{ route.estimated_time }} min</p>
             <p><strong>Average Congestion Probability:</strong> {{ route.average_congestion_probability }}%</p>
+            <p><strong>Congested Junctions:</strong> {{ route.currently_congested_junctions }}</p>
             
             <div>
                 {% for detail in route.route_details %}
@@ -67,13 +152,12 @@
                 {% endwith %}
             </div>
         </div>
-    {% endfor %}
+        {% endfor %}
         {% else %}
             <p>No alternate routes available.</p>
         {% endif %}
+        {% endif %}
     {% endif %}
-</div>
-
 </body>
 </html>
 

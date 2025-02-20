@@ -494,28 +494,6 @@ def analyze_congestion(request):
         )
 
         if congestion_analysis:
-            # Send email notifications for congested junctions
-            for area in congestion_analysis:
-                if area['risk_level'] in ['MODERATE', 'HIGH', 'SEVERE']:
-                    # Get affected vehicles
-                    junction = Junction.objects.get(name=area['junction_name'])
-                    affected_vehicles = Vehicle.objects.filter(
-                        junctionvehiclelog__junction=junction,
-                        junctionvehiclelog__timestamp__gte=timezone.now() - timedelta(days=days)
-                    ).distinct()
-                    
-                    # Find alternative routes
-                    alternative_routes = _find_alternative_routes(junction)
-                    
-                    # Send notification to each vehicle owner
-                    for vehicle in affected_vehicles:
-                        send_congestion_email(
-                            vehicle.owner_email,
-                            vehicle.owner_name,
-                            area,
-                            junction.name,
-                            alternative_routes
-                        )
             
             return render(request, "analyzecongestion.html", {
                 "message": "Congestion analysis completed successfully. Email notifications sent.",
@@ -547,15 +525,18 @@ def analyze_congestion(request):
 def predict_and_suggest_routes(request):
     """
     View to render congestion predictions and alternate routes.
+    Also sends email notification about the selected route.
     """
     junctions = Junction.objects.all()
     start_junction_name = request.GET.get('start_junction')
     end_junction_name = request.GET.get('end_junction')
+    user_email = request.GET.get('email')
+    vehicle_plate = request.GET.get('vehicle_plate')
+    send_notifications = request.GET.get('send_notifications') == 'true'
     
     if not start_junction_name or not end_junction_name:
         return render(request, "prediction.html", {
-            "junctions":junctions,
-            "error": "Both start and end junction names are required."
+            "junctions": junctions,
         })
 
     try:
@@ -575,6 +556,43 @@ def predict_and_suggest_routes(request):
             end_junction,
             current_time
         )
+        
+        # Send email notification if requested and email is provided
+        notification_sent = False
+        if send_notifications and alternate_routes:
+            # Get vehicle owner information if plate provided
+            owner_name = "Traveler"
+            if vehicle_plate:
+                try:
+                    vehicle = Vehicle.objects.get(number_plate=vehicle_plate)
+                    owner_name = vehicle.owner_name
+                    if not user_email:
+                        user_email = vehicle.owner_email
+                except Vehicle.DoesNotExist:
+                    pass
+                    
+            # Only send if we have routes to suggest and a valid email
+            if user_email:
+                # Get congestion data for start junction
+                start_congestion = TrafficPrediction.get_current_congestion_state(start_junction)
+                
+                # Format congestion data for email
+                congestion_data = {
+                    'risk_level': 'HIGH' if start_congestion['is_congested'] else 'LOW',
+                    'stats': {
+                        'avg_daily_vehicles': congestion_prediction.get('current_state', {}).get('vehicle_count', 0),
+                        'congestion_frequency': congestion_prediction.get('probability', 0)
+                    }
+                }
+                
+                notification_sent = send_route_email(
+                    user_email,
+                    owner_name,
+                    congestion_data,
+                    start_junction_name,
+                    end_junction_name,
+                    alternate_routes
+                )
 
         return render(request, "prediction.html", {
             "junctions": junctions,
@@ -582,45 +600,74 @@ def predict_and_suggest_routes(request):
             "end_junction": end_junction_name,
             "current_time": current_time.strftime("%Y-%m-%d %H:%M:%S"),
             "congestion_prediction": congestion_prediction,
-            "alternate_routes": alternate_routes
+            "alternate_routes": alternate_routes,
+            "notification_sent": notification_sent
         })
         
     except Junction.DoesNotExist:
         return render(request, "prediction.html", {
+            "junctions": junctions,
             "error": "One or both junctions not found."
         })
     except Exception as e:
         return render(request, "prediction.html", {
-            "junction":junctions,
+            "junctions": junctions,
             "error": f"An unexpected error occurred: {str(e)}"
         })
 
 
-
-
-def send_congestion_email(email, owner_name, congestion_data, junction_name, alternative_routes):
-    """Send email notification about congestion with alternative routes"""
+def send_route_email(email, owner_name, congestion_data, start_junction, end_junction, routes):
+    """Send email notification about route options between junctions"""
     try:
-        subject = f"Traffic Alert: Congestion at {junction_name}"
+        subject = f"Traffic Route Alert: {start_junction} to {end_junction}"
         
         message = f"""
 Dear {owner_name},
 
-We've detected significant congestion at {junction_name}.
+Here is your requested route information from {start_junction} to {end_junction}.
 
-Congestion Details:
+Current Congestion at Starting Point:
 - Risk Level: {congestion_data['risk_level']}
-- Average Daily Vehicles: {congestion_data['stats']['avg_daily_vehicles']}
-- Congestion Frequency: {congestion_data['stats']['congestion_frequency']}%
+- Current Traffic Volume: {congestion_data['stats']['avg_daily_vehicles']} vehicles
+- Congestion Probability: {congestion_data['stats']['congestion_frequency']}%
 
-Suggested Alternative Routes:
+Recommended Routes:
 """
 
-        for route in alternative_routes:
-            message += f"- {route['route']} via {route['via']}\n"
+        # Add recommended routes first
+        recommended_routes = [route for route in routes if route['route_status'] == 'RECOMMENDED']
+        for i, route in enumerate(recommended_routes, 1):
+            # Create a readable route path
+            route_path = []
+            for detail in route['route_details']:
+                route_path.append(detail['junction'])
+            route_path.append(end_junction)  # Add the final destination
+            
+            message += f"\n{i}. RECOMMENDED ROUTE: {' → '.join(route_path)}\n"
+            message += f"   Estimated Travel Time: {route['estimated_time']} minutes\n"
+            message += f"   Congestion Probability: {route['average_congestion_probability']}%\n"
+            
+            # Add more details about congested junctions if any
+            if route['currently_congested_junctions'] > 0:
+                message += f"   Note: {route['currently_congested_junctions']} junction(s) currently experiencing congestion\n"
+        
+        # Add routes to avoid
+        routes_to_avoid = [route for route in routes if route['route_status'] == 'AVOID']
+        if routes_to_avoid:
+            message += "\nRoutes to Avoid:\n"
+            for i, route in enumerate(routes_to_avoid, 1):
+                # Create a readable route path
+                route_path = []
+                for detail in route['route_details']:
+                    route_path.append(detail['junction'])
+                route_path.append(end_junction)  # Add the final destination
+                
+                message += f"{i}. {' → '.join(route_path)}\n"
+                message += f"   Reason: {route['currently_congested_junctions']} congested junction(s)\n"
+                message += f"   Estimated delay: {route['estimated_time']} minutes\n"
             
         message += """
-Please plan your journey accordingly.
+Safe travels! This route information is based on current traffic conditions and may change.
 
 Regards,
 Traffic Management System
@@ -639,35 +686,3 @@ Traffic Management System
     except Exception as e:
         print(f"Failed to send email to {email}: {str(e)}")
         return False
-
-
-def _find_alternative_routes(congested_junction):
-    """Find alternative routes to avoid congested junction"""
-    # Get all roads connected to the congested junction
-    congested_roads = set(congested_junction.roads.all())
-    
-    # Find other junctions that aren't congested
-    alternative_routes = []
-    
-    # Get other junctions
-    other_junctions = Junction.objects.exclude(id=congested_junction.id)
-    
-    for junction in other_junctions:
-        # Simple alternative route suggestion
-        alternative_routes.append({
-            'route': f"Use {junction.name} junction instead",
-            'via': ", ".join([road.name for road in junction.roads.all()[:2]])
-        })
-        
-        # Limit to 3 alternative routes
-        if len(alternative_routes) >= 3:
-            break
-            
-    # If no alternatives found, suggest a generic detour
-    if not alternative_routes:
-        alternative_routes.append({
-            'route': "Consider delaying your journey"
-        })
-        
-    return alternative_routes
-
