@@ -1,4 +1,4 @@
-from django.shortcuts import render
+from django.shortcuts import render, redirect
 from django.http import JsonResponse
 from django.core.exceptions import ValidationError
 import json
@@ -16,39 +16,85 @@ def home(request):
 
 
 def add_vehicle(request):
-    number_plate = request.GET.get('plate', '')
-    owner_name = request.GET.get('owner', '')
-    vehicle_type = request.GET.get('type', '')
-    owner_email = request.GET.get('email', '')
-    if not number_plate:
-        return JsonResponse({"error": "Vehicle plate number is required."}, status=400)
-    if not owner_name:
-        return JsonResponse({"error": "Owner name is required."}, status=400)
-    if not vehicle_type:
-        return JsonResponse({"error": "Vehicle type is required."}, status=400)
-    if not owner_email:
-        return JsonResponse({"error": "Owner Email is requried."}, status=400)
-
-    try:
-        vehicle, created = Vehicle.objects.get_or_create(number_plate=number_plate, owner_name=owner_name, vehicle_type=vehicle_type,owner_email=owner_email)
-        return JsonResponse({
-            "message": "Vehicle registered successfully!" if created else "Vehicle already registered.",
-            "Vechicle": {
-                "Plate": vehicle.number_plate,
-                "Owner": vehicle.owner_name,
-                "Type": vehicle.vehicle_type,
-                "Email": vehicle.owner_email
-            }
-        }, status=201 if created else 200)
+    vehicle_types = Vehicle.VEHICLE_TYPES
     
-    except Exception as e:
-        return JsonResponse({"error": f"An error occurred: {str(e)}"}, status = 500)
+    if request.method == 'GET' and any(param in request.GET for param in ['plate', 'owner', 'type', 'email']):
+        number_plate = request.GET.get('plate', '')
+        owner_name = request.GET.get('owner', '')
+        vehicle_type = request.GET.get('type', '')
+        owner_email = request.GET.get('email', '')
+        
+        if not number_plate:
+            return render(request, "addvehicle.html", {
+                "error": "Vehicle plate number is required.",
+                "vehicle_types": vehicle_types
+            }, status=400)
+        if not owner_name:
+            return render(request, "addvehicle.html", {
+                "error": "Owner name is required.",
+                "vehicle_types": vehicle_types
+            }, status=400)
+        if not vehicle_type:
+            return render(request, "addvehicle.html", {
+                "error": "Vehicle type is required.",
+                "vehicle_types": vehicle_types
+            }, status=400)
+        if not owner_email:
+            return render(request, "addvehicle.html", {
+                "error": "Owner Email is required.",
+                "vehicle_types": vehicle_types
+            }, status=400)
+
+        valid_types = [type_code for type_code, _ in vehicle_types]
+        if vehicle_type not in valid_types:
+            return render(request, "addvehicle.html", {
+                "error": "Invalid vehicle type selected.",
+                "vehicle_types": vehicle_types
+            }, status=400)
+
+        try:
+            vehicle, created = Vehicle.objects.get_or_create(
+                number_plate=number_plate,
+                defaults={
+                    'owner_name': owner_name,
+                    'vehicle_type': vehicle_type,
+                    'owner_email': owner_email
+                }
+            )
+            
+            if not created:
+                vehicle.owner_name = owner_name
+                vehicle.vehicle_type = vehicle_type
+                vehicle.owner_email = owner_email
+                vehicle.save()
+                
+            return render(request, "addvehicle.html", {
+                "message": "Vehicle registered successfully!" if created else "Vehicle updated successfully.",
+                "vehicle": {
+                    "Plate": vehicle.number_plate,
+                    "Owner": vehicle.owner_name,
+                    "Type": vehicle.get_vehicle_type_display(),  
+                    "Email": vehicle.owner_email
+                },
+                "vehicle_types": vehicle_types
+            })
+        
+        except Exception as e:
+            return render(request, "addvehicle.html", {
+                "error": f"An error occurred: {str(e)}",
+                "vehicle_types": vehicle_types
+            }, status=500)
+    
+    
+    return render(request, "addvehicle.html", {"vehicle_types": vehicle_types})
+
+
     
 
 def add_roads(request):
     name = request.GET.get('name', '')
     if not name:
-        return JsonResponse({"error": "Road name is required."}, status=400)
+        return render(request,"addroads.html",{"error": "Road name is required."}, status=400)
     
     try:
         road, created = Road.objects.get_or_create(name=name)
@@ -57,52 +103,54 @@ def add_roads(request):
             "road": {
                 "name": road.name,
             }
-        }, status=201 if created else 200)
+        })
     
     except Exception as e:
-        return JsonResponse({"error": f"An error occurred: {str(e)}"}, status = 500)
+        return render(request,"addroads.html",{"error": f"An error occurred: {str(e)}"}, status = 500)
     
 def get_roads(request):
     roads = Road.objects.all()
-    data = [
-        {
-            "name": road.name,
+    return render(request, "getroads.html", {
+        "data": {
+            "roads": roads
         }
-        for road in roads
-    ]
-    return JsonResponse(data, safe=False)
+    })
 
 def add_junction(request):
     name = request.GET.get('name', '')
-    road_names = request.GET.getlist('roads', [])  # Gets multiple road names from query params
+    road_names = request.GET.getlist('roads', [])
+    
+    context = {}
     
     if not name:
-        return JsonResponse({"error": "Junction name is required."}, status=400)
-    
-    if len(road_names) < 2:
-        return JsonResponse({"error": "At least 2 roads are required for a junction."}, status=400)
-    
+        context["error"] = "Junction name is required."
+        return render(request, "addjunctions.html", context)
+
+    if not road_names:
+        context["error"] = "At least one road is required."
+        return render(request, "addjunctions.html", context)
+
     try:
-        # First, get all the road objects
+        if Junction.objects.filter(name=name).exists():
+            context["error"] = "Junction with this name already exists."
+            return render(request, "addjunctions.html", context)
+
         roads = [Road.objects.get(name=road_name) for road_name in road_names]
-        
-        # Create the junction
         junction = Junction.create(name=name, roads=roads)
-        
-        return JsonResponse({
-            "message": "Junction created successfully!",
-            "junction": {
-                "name": junction.name,
-                "roads": [road.name for road in junction.roads.all()]
-            }
-        }, status=201)
-    
+
+        context["message"] = "Junction created successfully!"
+        context["junction"] = {
+            "name": junction.name,
+            "roads": [road.name for road in junction.roads.all()]
+        }
+
     except Road.DoesNotExist:
-        return JsonResponse({"error": "One or more roads do not exist."}, status=400)
-    except ValidationError as e:
-        return JsonResponse({"error": str(e)}, status=400)
+        context["error"] = "One or more roads do not exist."
     except Exception as e:
-        return JsonResponse({"error": f"An error occurred: {str(e)}"}, status=500)
+        context["error"] = f"An error occurred: {str(e)}"
+
+    return render(request, "addjunctions.html", context)
+
 
 def get_junctions(request):
     junctions = Junction.objects.all()
@@ -110,92 +158,91 @@ def get_junctions(request):
         {
             "name": junction.name,
             "roads": [road.name for road in junction.roads.all()],
-            "logged_vehicles": [
-                {
-                    "plate": log.vehicle.number_plate,
-                    "entry_road": log.entry_road.name,
-                    "timestamp": log.timestamp
-                }
-                for log in JunctionVehicleLog.objects.filter(junction=junction)
-            ]
+            "logged_vehicles": [vehicle.number_plate for vehicle in junction.logged_vehicles.all()]
         }
         for junction in junctions
     ]
-    return JsonResponse(data, safe=False)
-
+    return render(request, 'getjunctions.html', {'data': data})
 
 
 def log_vehicle_at_junction(request):
-    junction_name = request.GET.get('junction', '')
-    vehicle_plate = request.GET.get('vehicle', '')
-    entry_road_name = request.GET.get('entry_road', '')
-    
-    if not junction_name:
-        return JsonResponse({"error": "Junction name is required."}, status=400)
-    
-    if not vehicle_plate:
-        return JsonResponse({"error": "Vehicle number plate is required."}, status=400)
-    
-    if not entry_road_name:
-        return JsonResponse({"error": "Entry road name is required."}, status=400)
-    
-    try:
-        # Get the junction and vehicle objects
-        junction = Junction.objects.get(name=junction_name)
-        vehicle = Vehicle.objects.get(number_plate=vehicle_plate)
-        entry_road = Road.objects.get(name=entry_road_name)
+    vehicles = Vehicle.objects.all()  # Query all vehicles
+    error = None
+    violation_info = None
 
-        if not junction.roads.filter(id=entry_road.id).exists():
-            return JsonResponse({
-                "error": f"Road '{entry_road_name}' is not connected to junction '{junction_name}'."
-            }, status=400)
-        
+    if request.method == "POST":
+        junction_name = request.POST.get('junction', '').strip()
+        vehicle_plate = request.POST.get('vehicle', '').strip()
+        entry_road_name = request.POST.get('entry_road', '').strip()
 
-        if entry_road.current_light_status == 'RED':
-            violation = Violation.create(
-                vehicle=vehicle,
-                violation_type='RED_LIGHT',
-                severity='HIGH',
-                junction=junction,
-                description=f"Vehicle ran red light at {entry_road.name} entering {junction.name} junction"
-            )
+        if not junction_name:
+            return render(request, "logvehicle.html", {"error": "Junction name is required.", "vehicles": vehicles}, status=400)
 
-        
-        # Log the vehicle at the junction
-        junction.log_vehicle(vehicle, entry_road)
-        
-        response_data = {
-            "message": "Vehicle logged successfully!",
-            "junction": {
-                "name": junction.name,
-                "vehicle": vehicle.number_plate,
-                "entry_road": entry_road.name,
-                "light_status": entry_road.current_light_status
-            }
-        }
-        
-        # Add violation information if a red light was run
-        if entry_road.current_light_status == 'RED':
-            response_data["violation"] = {
-                "type": "RED_LIGHT",
-                "severity": "HIGH",
-                "fine_amount": float(violation.fine_amount),
-                "description": violation.description
-            }
-            response_data["message"] = "Vehicle logged successfully, but violation recorded for running red light!"
-            
-        return JsonResponse(response_data, status=200)
+        if not vehicle_plate:
+            return render(request, "logvehicle.html", {"error": "Vehicle number plate is required.", "vehicles": vehicles}, status=400)
+
+        if not entry_road_name:
+            return render(request, "logvehicle.html", {"error": "Entry road name is required.", "vehicles": vehicles}, status=400)
+
+        try:
+            junction = Junction.objects.get(name=junction_name)
+            vehicle = Vehicle.objects.get(number_plate=vehicle_plate)
+            entry_road = Road.objects.get(name=entry_road_name)
+
+            if not junction.roads.filter(id=entry_road.id).exists():
+                return render(request, "logvehicle.html", {
+                    "error": f"Road '{entry_road_name}' is not connected to junction '{junction_name}'.",
+                    "vehicles": vehicles
+                }, status=400)
+
+            if entry_road.current_light_status == 'RED':
+                violation = Violation.create(
+                    vehicle=vehicle,
+                    violation_type='RED_LIGHT',
+                    severity='HIGH',
+                    junction=junction,
+                    description=f"Vehicle ran red light at {entry_road.name} entering {junction.name} junction"
+                )
+                violation_info = {
+                    "type": "RED_LIGHT",
+                    "severity": "HIGH",
+                    "fine_amount": float(violation.fine_amount),
+                    "description": violation.description
+                }
+
+            junction.log_vehicle(vehicle, entry_road)
+
+            request.session["message"] = "Vehicle logged successfully!"
+            if violation_info:
+                request.session["violation"] = violation_info
+                request.session["message"] = "Vehicle logged successfully, but violation recorded for running red light!"
+
+            return redirect("logvehicle")  # Prevents duplicate form submissions
+
+        except Junction.DoesNotExist:
+            error = "Junction does not exist."
+        except Vehicle.DoesNotExist:
+            error = "Vehicle does not exist."
+        except Road.DoesNotExist:
+            error = "Entry road does not exist."
+        except Exception as e:
+            error = f"An error occurred: {str(e)}"
+
+        return render(request, "logvehicle.html", {"error": error, "vehicles": vehicles}, status=400)
+
+    # Retrieve session-stored messages after redirect and clear them
+    message = request.session.pop("message", None)
+    violation_info = request.session.pop("violation", None)
+
+    return render(request, "logvehicle.html", {
+        "vehicles": vehicles,
+        "message": message,
+        "violation": violation_info
+    })
 
 
-    
-    except Junction.DoesNotExist:
-        return JsonResponse({"error": "Junction does not exist."}, status=404)
-    except Vehicle.DoesNotExist:
-        return JsonResponse({"error": "Vehicle does not exist."}, status=404)
-    except Road.DoesNotExist:
-        return JsonResponse({"error": "Entry road does not exist."}, status=404)
-    except Exception as e:
-        return JsonResponse({"error": f"An error occurred: {str(e)}"}, status=500)
+
+
 
 def parking_fine(request):
     vehicle_plate = request.GET.get('vehicle_plate', '')
