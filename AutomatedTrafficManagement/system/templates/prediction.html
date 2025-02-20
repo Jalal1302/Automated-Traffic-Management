@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Route Prediction</title>
+</head>
+<body>
+
+
+    <h1>Route Prediction</h1>
+
+    <br><br>
+<a href="{% url 'home' %}">Back to Home</a>
+    <form method="GET" action="">
+        <label for="start_junction">Start Junction:</label>
+        <select id="start_junction" name="start_junction" required>
+            <option value="">-- Select Start Junction --</option>
+            {% for junction in junctions %}
+                <option value="{{ junction.name }}" {% if junction.name == start_junction %}selected{% endif %}>
+                    {{ junction.name }}
+                </option>
+            {% endfor %}
+        </select>
+
+        <label for="end_junction">End Junction:</label>
+        <select id="end_junction" name="end_junction" required>
+            <option value="">-- Select End Junction --</option>
+            {% for junction in junctions %}
+                <option value="{{ junction.name }}" {% if junction.name == end_junction %}selected{% endif %}>
+                    {{ junction.name }}
+                </option>
+            {% endfor %}
+        </select>
+
+        <button type="submit">Predict Route</button>
+    </form>
+
+    {% if error %}
+        <p class="error">{{ error }}</p>
+    {% else %}
+        <h3>From: {{ start_junction }}</h3>
+        <h3>To: {{ end_junction }}</h3>
+        <p><strong>Current Time:</strong> {{ current_time }}</p>
+
+        <h3>Congestion Prediction:</h3>
+        <p>{{ congestion_prediction }}</p>
+
+        <h3>Alternate Routes:</h3>
+        {% if alternate_routes %}
+        {% for route in alternate_routes %}
+        <div class="route-container">
+            <p><strong>Route Status:</strong> {{ route.route_status }}</p>
+            <p><strong>Estimated Time:</strong> {{ route.estimated_time }} min</p>
+            <p><strong>Average Congestion Probability:</strong> {{ route.average_congestion_probability }}%</p>
+            
+            <div>
+                {% for detail in route.route_details %}
+                    <span class="junction">{{ detail.junction }}</span>
+                    {% if detail.connecting_road %}
+                        <span class="road">➡ {{ detail.connecting_road }} ➡</span>
+                    {% endif %}
+                {% endfor %}
+                
+                {% with last_junction=route.route_details|last %}
+                    <span class="junction">{{ end_junction }}</span>
+                {% endwith %}
+            </div>
+        </div>
+    {% endfor %}
+        {% else %}
+            <p>No alternate routes available.</p>
+        {% endif %}
+    {% endif %}
+</div>
+
+</body>
+</html>
+

@@ -110,9 +110,18 @@ def add_roads(request):
     
 def get_roads(request):
     roads = Road.objects.all()
+    
+    road_data = []
+    for road in roads:
+        road_data.append({
+            'name': road.name,
+            'light_status': road.current_light_status,
+            'last_change': road.last_status_change
+        })
+    
     return render(request, "getroads.html", {
         "data": {
-            "roads": roads
+            "roads": road_data
         }
     })
 
@@ -153,15 +162,25 @@ def add_junction(request):
 
 
 def get_junctions(request):
-    junctions = Junction.objects.all()
-    data = [
-        {
+    junctions = Junction.objects.all().prefetch_related('roads', 'logged_vehicles')
+    data = []
+    
+    for junction in junctions:
+        roads_with_status = []
+        for road in junction.roads.all():
+            roads_with_status.append({
+                'name': road.name,
+                'light_status': road.current_light_status,
+                'last_change': road.last_status_change
+            })
+        
+        junction_data = {
             "name": junction.name,
-            "roads": [road.name for road in junction.roads.all()],
+            "roads": roads_with_status,
             "logged_vehicles": [vehicle.number_plate for vehicle in junction.logged_vehicles.all()]
         }
-        for junction in junctions
-    ]
+        data.append(junction_data)
+    
     return render(request, 'getjunctions.html', {'data': data})
 
 
@@ -195,7 +214,27 @@ def log_vehicle_at_junction(request):
                     "vehicles": vehicles
                 }, status=400)
 
-            if entry_road.current_light_status == 'RED':
+            # Check if the vehicle is an emergency vehicle
+            if vehicle.vehicle_type == 'EMERGENCY':
+                # Get all roads in the junction
+                junction_roads = junction.roads.all()
+                
+                # Set entry road to green light
+                entry_road.light_status = 'GREEN'
+                entry_road.last_status_change = timezone.now()
+                entry_road.save()
+                
+                # Set all other roads to red light
+                for road in junction_roads:
+                    if road.id != entry_road.id:
+                        road.light_status = 'RED'
+                        road.last_status_change = timezone.now()
+                        road.save()
+                
+                # Update junction's last status change timestamp
+                junction.last_status_change = timezone.now()
+                junction.save()
+            elif entry_road.current_light_status == 'RED':
                 violation = Violation.create(
                     vehicle=vehicle,
                     violation_type='RED_LIGHT',
@@ -213,7 +252,9 @@ def log_vehicle_at_junction(request):
             junction.log_vehicle(vehicle, entry_road)
 
             request.session["message"] = "Vehicle logged successfully!"
-            if violation_info:
+            if vehicle.vehicle_type == 'EMERGENCY':
+                request.session["message"] = "Emergency vehicle logged successfully. Traffic lights adjusted to prioritize passage!"
+            elif violation_info:
                 request.session["violation"] = violation_info
                 request.session["message"] = "Vehicle logged successfully, but violation recorded for running red light!"
 
@@ -239,9 +280,6 @@ def log_vehicle_at_junction(request):
         "message": message,
         "violation": violation_info
     })
-
-
-
 
 
 def parking_fine(request):
@@ -508,16 +546,18 @@ def analyze_congestion(request):
 
 def predict_and_suggest_routes(request):
     """
-    API endpoint to get congestion predictions and alternate routes.
+    View to render congestion predictions and alternate routes.
     """
+    junctions = Junction.objects.all()
     start_junction_name = request.GET.get('start_junction')
     end_junction_name = request.GET.get('end_junction')
     
     if not start_junction_name or not end_junction_name:
-        return JsonResponse({
+        return render(request, "prediction.html", {
+            "junctions":junctions,
             "error": "Both start and end junction names are required."
-        }, status=400)
-    
+        })
+
     try:
         start_junction = Junction.objects.get(name=start_junction_name)
         end_junction = Junction.objects.get(name=end_junction_name)
@@ -528,15 +568,16 @@ def predict_and_suggest_routes(request):
             start_junction,
             current_time
         )
-        
+
         # Get alternate routes
         alternate_routes = TrafficPrediction.get_alternate_routes(
             start_junction,
             end_junction,
             current_time
         )
-        
-        return JsonResponse({
+
+        return render(request, "prediction.html", {
+            "junctions": junctions,
             "start_junction": start_junction_name,
             "end_junction": end_junction_name,
             "current_time": current_time.strftime("%Y-%m-%d %H:%M:%S"),
@@ -545,13 +586,16 @@ def predict_and_suggest_routes(request):
         })
         
     except Junction.DoesNotExist:
-        return JsonResponse({
+        return render(request, "prediction.html", {
             "error": "One or both junctions not found."
-        }, status=404)
+        })
     except Exception as e:
-        return JsonResponse({
+        return render(request, "prediction.html", {
+            "junction":junctions,
             "error": f"An unexpected error occurred: {str(e)}"
-        }, status=500)
+        })
+
+
 
 
 def send_congestion_email(email, owner_name, congestion_data, junction_name, alternative_routes):
@@ -622,8 +666,7 @@ def _find_alternative_routes(congested_junction):
     # If no alternatives found, suggest a generic detour
     if not alternative_routes:
         alternative_routes.append({
-            'route': "Consider delaying your journey or using main highways",
-            'via': "Main city bypass"
+            'route': "Consider delaying your journey"
         })
         
     return alternative_routes
