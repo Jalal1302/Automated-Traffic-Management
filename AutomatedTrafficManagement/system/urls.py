@@ -14,5 +14,6 @@ urlpatterns = [
     path('trafficanalysis/',views.get_traffic_analysis, name ='trafficanalysis'), 
     path('analyzecongestion/',views.analyze_congestion,name = 'analyzecongestion'),
     path('speedingviolation/', views.speeding_violation, name='speedingviolation'),
+    path('getprediction/', views.predict_and_suggest_routes, name = 'getprediction'),
     
 ]
