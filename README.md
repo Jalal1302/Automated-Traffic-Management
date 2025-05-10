@@ -51,4 +51,4 @@ Open a terminal in the project's directory and run:
 python manage.py runserver
 ```
 
-Then go to localhost:8000 in a webpage to access the program.
+Then go to localhost:8000 in a webpage to access the program. Do note that in order to use your own database, the database settings in settings.py might need to be altered.
