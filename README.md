@@ -17,6 +17,16 @@ Laurent Bialylew
 
 *[Git](https://git-scm.com/downloads)
 
+## Project Structure
+
+```
+AutomatedTrafficManagement/
+├── AutomatedTrafficManagement/    # Django app settings
+├── system/                        # Django app source code
+├── manage.py                      # File to run app
+└── README.md                      # This file
+```
+
 ## Core features
 - Registration of a vehicle
 - Display vehicles list
