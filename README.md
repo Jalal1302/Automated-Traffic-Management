@@ -24,6 +24,8 @@ AutomatedTrafficManagement/
 ├── AutomatedTrafficManagement/    # Django app settings
 ├── system/                        # Django app source code
 ├── manage.py                      # File to run app
+├── UML Diagrams                   # UML Diagrams of this project
+├── Slides                         # Weekly presentations on the project
 └── README.md                      # This file
 ```
 
